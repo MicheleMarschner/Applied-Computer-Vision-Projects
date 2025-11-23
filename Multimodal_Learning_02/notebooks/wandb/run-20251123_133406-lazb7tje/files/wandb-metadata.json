@@ -1,0 +1,36 @@
+{
+  "os": "macOS-15.4-arm64-arm-64bit-Mach-O",
+  "python": "CPython 3.14.0",
+  "startedAt": "2025-11-23T12:34:06.704905Z",
+  "program": "/Users/MicheleMarschner/Documents/Uni/WiSe_2025_26/Applied CV/Applied-Computer-Vision-Projects/Multimodal_Learning_02/notebooks/01_dataset_exploration.ipynb",
+  "codePath": "/Users/MicheleMarschner/Documents/Uni/WiSe_2025_26/Applied CV/Applied-Computer-Vision-Projects/Multimodal_Learning_02/notebooks/01_dataset_exploration.ipynb",
+  "codePathLocal": "01_dataset_exploration.ipynb",
+  "git": {
+    "remote": "https://github.com/MicheleMarschner/Applied-Computer-Vision-Projects.git",
+    "commit": "d3ab73b1424ad14fe026fa60bd3d61daf6b25d18"
+  },
+  "email": "michele.marschner@gmail.com",
+  "root": "/Users/MicheleMarschner/Documents/Uni/WiSe_2025_26/Applied CV/Applied-Computer-Vision-Projects/Multimodal_Learning_02/notebooks",
+  "host": "MacBook-Pro.local",
+  "executable": "/opt/anaconda3/envs/aCV/bin/python",
+  "cpu_count": 8,
+  "cpu_count_logical": 8,
+  "disk": {
+    "/": {
+      "total": "494384795648",
+      "used": "110362542080"
+    }
+  },
+  "memory": {
+    "total": "17179869184"
+  },
+  "apple": {
+    "name": "Apple M1 Pro",
+    "ecpuCores": 2,
+    "pcpuCores": 6,
+    "gpuCores": 14,
+    "memoryGb": 16,
+    "ramTotalBytes": "17179869184"
+  },
+  "writerId": "215xi629ie7o02dxpp5chn1drhxr74kr"
+}
