@@ -32,7 +32,11 @@ pip install -r requirements.txt
 ---
 
 ## 2. Weights & Biases Project Link
-Add your public W&B project URL here.
+You can view all experiment runs, metrics, and logged artifacts in the public W&B project:
+
+- **Project name:** `clip-extended-assessment`
+- **W&B username:** `michele-marschner-university-of-potsdam`
+- 🔗 **https://wandb.ai/michele-marschner-university-of-potsdam/clip-extended-assessment**
 
 ---
 
