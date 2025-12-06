@@ -161,33 +161,24 @@ def train_model(model, optimizer, input_fn, loss_fn, epochs, train_dataloader, v
     return train_losses, valid_losses, epoch_times, max_gpu_mem_mb
 
 
-def compute_class_weights(dataset):
-  """
-  Compute inverse-frequency class weights to handle imbalance.
+def compute_class_weights(dataset, num_classes=2):
+    """
+    Compute inverse-frequency class weights from a dataset.
+    """
+    # Grab all labels from the prebuilt samples list (cheap)
+    labels = [sample["label"] for sample in dataset.samples]
+    labels = torch.tensor(labels, dtype=torch.long)
 
-  If train_labels is not provided, hard-coded counts are used
-  (as in the assignment description).
+    # Count occurrences of each class
+    class_counts = torch.bincount(labels, minlength=num_classes).float()
 
-  Args:
-      train_labels (torch.Tensor or None): Optional 1D tensor of labels
-          from the training set.
+    # Inverse-frequency style weights (rarer class -> larger weight)
+    class_weights = class_counts.sum() / (class_counts + 1e-6)
 
-  Returns:
-      torch.Tensor: Normalized class weights of shape (num_classes,).
-  """
-  # Extract all labels from the dataset
-  labels = [dataset[i][2] for i in range(len(dataset))]
-  labels = torch.tensor(labels, dtype=torch.long)
+    # Normalize so mean(weight) = 1 (optional but nice)
+    class_weights = class_weights / class_weights.mean()
 
-  # Count occurrences of each class
-  unique, counts = torch.unique(labels, return_counts=True)
-  class_counts = counts.float()
-
-  # Compute inverse-frequency weights (rarer class -> higher weight)
-  class_weights = class_counts.sum() / (class_counts + 1e-6)
-  class_weights = class_weights / class_weights.mean()
-
-  return class_weights
+    return class_weights
 
 
 def get_inputs(batch, device=None):
