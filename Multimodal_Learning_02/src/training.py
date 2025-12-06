@@ -2,6 +2,7 @@ import time
 from tqdm import tqdm
 import torch
 import wandb
+import numpy as np 
 
 from src.visualization import print_loss
 from src.utility import format_time
@@ -77,6 +78,7 @@ def train_model(model, optimizer, input_fn, loss_fn, epochs, train_dataloader, v
     train_losses = []
     valid_losses = []
     epoch_times = []
+    valid_accs = []
 
     best_val_loss = float('inf')
     best_model = None
@@ -118,13 +120,27 @@ def train_model(model, optimizer, input_fn, loss_fn, epochs, train_dataloader, v
         # ----- Validation loop -----
         model.eval()
         valid_loss = 0
+        correct = 0
+        total = 0
         with torch.no_grad():
           for step, batch in enumerate(val_dataloader):
               target = batch[target_idx].to(device)
               outputs = model(*input_fn(batch, device))
+              
+              # calculate loss
               valid_loss += loss_fn(outputs, target).item()
+              
+              # calculate accuracy 
+              preds = outputs.argmax(dim=1)
+              correct += (preds == target).sum().item()
+              total += target.size(0)
+
         valid_loss = valid_loss / (step + 1)
         valid_losses.append(valid_loss)
+
+        valid_acc = correct / total
+        valid_accs.append(valid_acc)
+
         print_loss(epoch, valid_loss, outputs, target, is_train=False)
 
         # Save best model based on validation loss
@@ -133,6 +149,10 @@ def train_model(model, optimizer, input_fn, loss_fn, epochs, train_dataloader, v
           best_model = model
           torch.save(best_model.state_dict(), model_save_path)
           print('Found and saved better weights for the model')
+        
+        # accuracy of best validation-loss epoch
+        best_epoch = int(np.argmin(valid_losses))
+        final_valid_acc = valid_accs[best_epoch]
 
         # calculate epoch times
         epoch_time = time.time() - start_time
@@ -152,13 +172,23 @@ def train_model(model, optimizer, input_fn, loss_fn, epochs, train_dataloader, v
                     "epoch": epoch + 1,
                     "train_loss": train_loss,
                     "valid_loss": valid_loss,
+                    "valid_acc": valid_acc,
                     "lr": optimizer.param_groups[0]["lr"],
                     "epoch_time": epoch_time_formatted,
                     "max_gpu_mem_mb_epoch": gpu_mem_mb if use_cuda else 0.0,
                 }
             )
 
-    return train_losses, valid_losses, epoch_times, max_gpu_mem_mb
+    return {
+        "train_losses": train_losses,
+        "valid_losses": valid_losses,
+        "valid_accs": valid_accs,
+        "epoch_times": epoch_times,
+        "best_valid_loss": float(best_val_loss),
+        "final_valid_acc": float(final_valid_acc),
+        "max_gpu_mem_mb": float(max_gpu_mem_mb),
+        "num_params": sum(p.numel() for p in model.parameters() if p.requires_grad),
+    }
 
 
 def compute_class_weights(dataset, num_classes=2):

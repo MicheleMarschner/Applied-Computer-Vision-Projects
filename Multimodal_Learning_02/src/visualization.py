@@ -98,3 +98,86 @@ def build_fusion_comparison_df(metrics, name_map=None):
             "GPU Memory (MB, max)": float(m["max_gpu_mem_mb"]),
         })
     return pd.DataFrame(rows)
+
+
+def build_pairwise_downsampling_tables(metrics, name_map):
+    """
+    Automatically finds all model pairs <base>_maxpool and <base>_strided,
+    builds comparison tables, and uses display names from name_map.
+
+    Args:
+        metrics (dict): Contains all logged results.
+        name_map (dict): Maps base model names to display strings.
+
+    Returns:
+        dict: { display_name: DataFrame }
+    """
+    tables = {}
+
+    # 1. Find all base names
+    base_names = set()
+    for key in metrics.keys():
+        if key.endswith("_pool"):
+            base_names.add(key.replace("_pool", ""))
+        elif key.endswith("_stride"):
+            base_names.add(key.replace("_stride", ""))
+
+    # 2. Build table for each base
+    for base in base_names:
+        key_pool   = f"{base}_pool"
+        key_stride = f"{base}_stride"
+
+        if key_pool not in metrics or key_stride not in metrics:
+            print(f"Skipping {base}: missing maxpool/strided pair.")
+            continue
+
+        m_pool   = metrics[key_pool]
+        m_stride = metrics[key_stride]
+
+        # Collect fields needed for Task 4
+        val_loss_pool   = float(m_pool["best_valid_loss"])
+        val_loss_stride = float(m_stride["best_valid_loss"])
+
+        params_pool     = int(m_pool["num_params"])
+        params_stride   = int(m_stride["num_params"])
+
+        time_pool       = float(np.sum(m_pool["epoch_times"]))
+        time_stride     = float(np.sum(m_stride["epoch_times"]))
+
+        acc_pool        = float(m_pool["final_valid_acc"])
+        acc_stride      = float(m_stride["final_valid_acc"])
+
+        # Human-readable display name
+        display_name = name_map.get(base, base)
+
+        # Build the DataFrame
+        df = pd.DataFrame([
+            {
+                "Metric": "Validation Loss (best)",
+                "MaxPool2d": val_loss_pool,
+                "Strided Conv": val_loss_stride,
+                "Difference (Strided - MaxPool)": val_loss_stride - val_loss_pool,
+            },
+            {
+                "Metric": "Parameters",
+                "MaxPool2d": params_pool,
+                "Strided Conv": params_stride,
+                "Difference (Strided - MaxPool)": params_stride - params_pool,
+            },
+            {
+                "Metric": "Training Time (s)",
+                "MaxPool2d": time_pool,
+                "Strided Conv": time_stride,
+                "Difference (Strided - MaxPool)": time_stride - time_pool,
+            },
+            {
+                "Metric": "Final Accuracy",
+                "MaxPool2d": acc_pool,
+                "Strided Conv": acc_stride,
+                "Difference (Strided - MaxPool)": acc_stride - acc_pool,
+            },
+        ])
+
+        tables[display_name] = df
+
+    return tables
