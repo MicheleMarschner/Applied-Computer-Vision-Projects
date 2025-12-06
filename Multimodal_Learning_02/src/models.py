@@ -41,6 +41,43 @@ class EmbedderMaxPool(nn.Module):
         x = torch.flatten(x, 1) # flatten all dimensions except batch
 
         return x
+    
+    
+class EmbedderStrided(nn.Module):
+    """
+    Embedder where all spatial downsampling is done via stride-2 convolutions.
+    """
+    def __init__(self, in_ch, feature_dim=128):
+        """
+        Args:
+            in_ch (int): Number of input channels.
+            feature_dim (int): Number of output channels in the last conv layer.
+        """
+        kernel_size = 3
+        stride_size = 2
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_ch, 32, kernel_size, stride=stride_size, padding=1)           # 64 -> 32
+        self.conv2 = nn.Conv2d(32, 64, kernel_size, stride=stride_size, padding=1)              # 32 -> 16
+        self.conv3 = nn.Conv2d(64, feature_dim, kernel_size, stride=stride_size, padding=1)     # 16 -> 8
+
+        # For 64x64 input and 3 conv with stride 2 we end up at 8x8 spatial size.
+        self.flatten_dim = feature_dim * 8 * 8
+
+
+    def forward(self, x):
+        """
+        Args:
+            x (torch.Tensor): Input tensor of shape (B, C, H, W).
+
+        Returns:
+            torch.Tensor: Flattened feature tensor of shape (B, flatten_dim).
+        """
+        x = F.relu(self.conv1(x))           
+        x = F.relu(self.conv2(x))          
+        x = F.relu(self.conv3(x))          
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+
+        return x
 
 
 class FullyConnectedHead(nn.Module):
@@ -80,7 +117,7 @@ class EarlyFusionModel(nn.Module):
     The 8-channel tensor (4 RGB-like + 4 XYZA) is passed through a shared
     CNN embedder and a fully-connected classification head.
     """
-    def __init__(self, in_ch=8, output_dim=2):
+    def __init__(self, in_ch=8, output_dim=2, embedder_cls=EmbedderMaxPool):
         """
         Args:
             in_ch (int): Number of input channels after concatenation.
@@ -89,7 +126,7 @@ class EarlyFusionModel(nn.Module):
         super().__init__()
 
         # Shared embedder for all channels
-        self.embedder = EmbedderMaxPool(in_ch)
+        self.embedder = embedder_cls(in_ch)
 
         # Fully-connected head on top of the shared embedding
         self.fullyConnected = FullyConnectedHead(
@@ -118,14 +155,14 @@ class ConcatIntermediateNet(nn.Module):
     inputs, their flattened features are concatenated, and a shared
     FullyConnectedHead maps the joint representation to class logits.
     """
-    def __init__(self, rgb_ch, xyz_ch, output_dim, feature_dim=128):
+    def __init__(self, rgb_ch, xyz_ch, output_dim, feature_dim=128, embedder_cls=EmbedderMaxPool):
         super().__init__()
 
         # Independent Encoders
         # RGB learns textures/colors
-        self.rgb_encoder = EmbedderMaxPool(in_ch=4, feature_dim=feature_dim)    
+        self.rgb_encoder = embedder_cls(in_ch=rgb_ch, feature_dim=feature_dim)    
         # LiDAR learns geometry/depth
-        self.xyz_encoder = EmbedderMaxPool(in_ch=4, feature_dim=feature_dim)   
+        self.xyz_encoder = embedder_cls(in_ch=xyz_ch, feature_dim=feature_dim)   
 
         # Calculate combined dimension
         # (200 * 8 * 8) + (200 * 8 * 8)
@@ -156,14 +193,14 @@ class AddIntermediateNet(nn.Module):
     The resulting feature vectors must have the same size; they are
     added element-wise and passed to a shared FullyConnectedHead.
     """
-    def __init__(self, rgb_ch, xyz_ch, output_dim, feature_dim=128):
+    def __init__(self, rgb_ch, xyz_ch, output_dim, feature_dim=128, embedder_cls=EmbedderMaxPool):
         super().__init__()
 
         # Independent Encoders
         # RGB learns textures/colors
-        self.rgb_encoder = EmbedderMaxPool(in_ch=4, feature_dim=feature_dim)    
+        self.rgb_encoder = embedder_cls(in_ch=rgb_ch, feature_dim=feature_dim)    
         # LiDAR learns geometry/depth
-        self.xyz_encoder = EmbedderMaxPool(in_ch=4, feature_dim=feature_dim)    
+        self.xyz_encoder = embedder_cls(in_ch=xyz_ch, feature_dim=feature_dim)    
 
         # For addition, shapes must match
         fused_dim = self.rgb_encoder.flatten_dim                        # same size after addition
@@ -193,14 +230,14 @@ class MatmulIntermediateNet(nn.Module):
     and combined via a bilinear interaction (matrix product) before
     the fully-connected head.
     """
-    def __init__(self, rgb_ch, xyz_ch, output_dim, feature_dim):
+    def __init__(self, rgb_ch, xyz_ch, output_dim, feature_dim, embedder_cls=EmbedderMaxPool):
         super().__init__()
 
         # Independent Encoders
         # RGB learns textures/colors
-        self.rgb_encoder = EmbedderMaxPool(in_ch=4, feature_dim=feature_dim)    
+        self.rgb_encoder = embedder_cls(in_ch=rgb_ch, feature_dim=feature_dim)    
         # LiDAR learns geometry/depth
-        self.xyz_encoder = EmbedderMaxPool(in_ch=4, feature_dim=feature_dim)    
+        self.xyz_encoder = embedder_cls(in_ch=xyz_ch, feature_dim=feature_dim)    
 
         # For multiplication, shapes must match
         #embedding_dim = self.rgb_encoder.flatten_dim
@@ -243,14 +280,14 @@ class HadamardIntermediateNet(nn.Module):
     element-wise to capture multiplicative interactions between
     modalities, then fed to the classification head.
     """
-    def __init__(self, rgb_ch, xyz_ch, output_dim, feature_dim):
+    def __init__(self, rgb_ch, xyz_ch, output_dim, feature_dim, embedder_cls=EmbedderMaxPool):
         super().__init__()
 
         # Independent Encoders
         # RGB learns textures/colors
-        self.rgb_encoder = EmbedderMaxPool(in_ch=4, feature_dim=feature_dim)    
+        self.rgb_encoder = embedder_cls(in_ch=rgb_ch, feature_dim=feature_dim)    
         # LiDAR learns geometry/depth
-        self.xyz_encoder = EmbedderMaxPool(in_ch=4, feature_dim=feature_dim)    
+        self.xyz_encoder = embedder_cls(in_ch=xyz_ch, feature_dim=feature_dim)    
 
         # For elementwise multiplication, shapes must match
         fused_dim = self.rgb_encoder.flatten_dim                        # same size after addition
@@ -280,10 +317,10 @@ class LateNet(nn.Module):
     Their logits are then averaged (or combined) at the decision level
     to obtain the final prediction.
     """
-    def __init__(self, output_dim):
+    def __init__(self, rgb_ch, xyz_ch, output_dim, embedder_cls=EmbedderMaxPool):
         super().__init__()
-        self.rgb = EmbedderMaxPool(4)
-        self.xyz = EmbedderMaxPool(4)
+        self.rgb = embedder_cls(rgb_ch)
+        self.xyz = embedder_cls(xyz_ch)
 
         # each embedder outputs flatten_dim (e.g. 12800)
         fusion_dim = self.rgb.flatten_dim * 2  # rgb + xyz
