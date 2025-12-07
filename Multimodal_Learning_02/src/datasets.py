@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader, Subset
 
 import numpy as np
 
-from src.utility import create_subset, create_deterministic_training_dataloader, get_torch_xyza
+from src.utility import create_random_subset, create_deterministic_training_dataloader, get_torch_xyza
 
 
 class AssessmentDataset(Dataset):
@@ -244,6 +244,52 @@ class AssessmentXYZADataset(Dataset):
         return rgb, lidar, label
 
 
+class AssessmentCILPDataset(Dataset):
+    def __init__(self, root_dir, transform_rgb=None):
+        self.root_dir = Path(root_dir)
+        self.rgb = []
+        self.lidar = []
+        self.class_idx = []
+
+        for class_name in ["cubes", "spheres"]:
+            rgb_dir   = self.root_dir / class_name / "rgb"
+            lidar_dir = self.root_dir / class_name / "lidar"
+
+            rgb_files = sorted(rgb_dir.glob("*.png"))
+
+            for rgb_path in rgb_files:
+                file_number = rgb_path.stem
+                lidar_npy = lidar_dir / f"{file_number}.npy"
+                if not lidar_npy.exists():
+                    continue
+
+                # RGB
+                rgb_img = Image.open(rgb_path)
+                rgb_tensor = transform_rgb(rgb_img)
+
+                # LiDAR depth (1 channel)
+                lidar_arr = np.load(lidar_npy)           # (H, W)
+                lidar_tensor = torch.from_numpy(lidar_arr).float().unsqueeze(0)
+
+                self.rgb.append(rgb_tensor)
+                self.lidar.append(lidar_tensor)
+
+                if class_name.startswith("cube"):
+                    self.class_idx.append(torch.tensor([0.], dtype=torch.float32))
+                else:
+                    self.class_idx.append(torch.tensor([1.], dtype=torch.float32))
+
+    def __len__(self):
+        return len(self.rgb)
+
+    def __getitem__(self, idx):
+        return (
+            self.rgb[idx],
+            self.lidar[idx],
+            self.class_idx[idx],
+        )
+
+
 def compute_dataset_mean_std(root_dir, img_size=64):
     """
     Estimate the per-channel mean and std for the RGB+LiDAR data.
@@ -270,7 +316,7 @@ def compute_dataset_mean_std(root_dir, img_size=64):
     )
 
     subset_size = min(2000, len(stats_dataset)*0.3)
-    subset_for_stats = create_subset(size=subset_size)
+    subset_for_stats = create_random_subset(size=subset_size, dataset=stats_dataset)
 
     loader = DataLoader(subset_for_stats, batch_size=64, shuffle=False, num_workers=2)
 
@@ -322,7 +368,7 @@ def compute_dataset_mean_std_neu(root_dir, img_size=64, seed=51):
     )
 
     subset_size = min(2000, len(stats_dataset)*0.3)
-    subset_for_stats = create_subset(size=subset_size)
+    subset_for_stats = create_random_subset(size=subset_size, dataset=stats_dataset)
 
     loader = DataLoader(subset_for_stats, batch_size=64, shuffle=False)
 
@@ -343,7 +389,7 @@ def compute_dataset_mean_std_neu(root_dir, img_size=64, seed=51):
     return mean, std
 
 
-def get_dataloaders(root_dir, valid_batches, test_frac=0.15, batch_size=64, img_transforms=None, seed=51):
+def get_dataloaders(root_dir, valid_batches, num_workers=2, test_frac=0.15, batch_size=64, img_transforms=None, seed=51):
     """
     Create train / val / test datasets + dataloaders.
 
@@ -399,6 +445,8 @@ def get_dataloaders(root_dir, valid_batches, test_frac=0.15, batch_size=64, img_
         batch_size=batch_size,
         shuffle=True,
         drop_last=True,
+        num_workers=num_workers,
+        pin_memory=True,
     )
 
     val_loader = DataLoader(
@@ -406,6 +454,8 @@ def get_dataloaders(root_dir, valid_batches, test_frac=0.15, batch_size=64, img_
         batch_size=batch_size,
         shuffle=False,
         drop_last=True,
+        num_workers=num_workers,
+        pin_memory=True,
     )
 
     test_loader = DataLoader(
@@ -413,6 +463,81 @@ def get_dataloaders(root_dir, valid_batches, test_frac=0.15, batch_size=64, img_
         batch_size=batch_size,
         shuffle=False,
         drop_last=False,   # for evaluation, we usually don't drop examples
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    return train_ds, train_loader, val_ds, val_loader, test_ds, test_loader
+
+
+def get_cilp_dataloaders(
+    root_dir,
+    valid_batches,
+    num_workers=2,
+    test_frac=0.10,
+    batch_size=64,
+    img_transforms=None,
+    seed=51,
+):
+    """
+    Train/val/test splits + dataloaders for the CILP depth-only dataset.
+
+    Uses AssessmentCILPDataset → lidar/*.npy as a single channel.
+    """
+    base_dataset = AssessmentCILPDataset(
+        root_dir=root_dir,
+        transform_rgb=img_transforms,
+    )
+
+    N = len(base_dataset)
+    val_size = valid_batches * batch_size
+
+    if N <= val_size:
+        raise ValueError(f"CILP dataset too small: N={N}, need > {val_size}.")
+
+    remaining = N - val_size
+    test_size = int(remaining * test_frac)
+    train_size = remaining - test_size
+
+    print(f"[CILP] Total samples: {N}")
+    print(f"[CILP] Train: {train_size}, Val: {val_size}, Test: {test_size}")
+
+    g = torch.Generator().manual_seed(seed)
+    perm = torch.randperm(N, generator=g).tolist()
+
+    train_idx = perm[:train_size]
+    val_idx   = perm[train_size:train_size + val_size]
+    test_idx  = perm[train_size + val_size:]
+
+    train_ds = Subset(base_dataset, train_idx)
+    val_ds   = Subset(base_dataset, val_idx)
+    test_ds  = Subset(base_dataset, test_idx)
+
+    train_loader = create_deterministic_training_dataloader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False,
+        num_workers=num_workers,
+        pin_memory=True,
     )
 
     return train_ds, train_loader, val_ds, val_loader, test_ds, test_loader

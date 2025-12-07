@@ -144,8 +144,8 @@ def build_pairwise_downsampling_tables(metrics, name_map):
         time_pool       = float(np.sum(m_pool["epoch_times"]))
         time_stride     = float(np.sum(m_stride["epoch_times"]))
 
-        acc_pool        = float(m_pool["final_valid_acc"])
-        acc_stride      = float(m_stride["final_valid_acc"])
+        acc_pool        = float(m_pool["best_valid_acc"])
+        acc_stride      = float(m_stride["best_valid_acc"])
 
         # Human-readable display name
         display_name = name_map.get(base, base)

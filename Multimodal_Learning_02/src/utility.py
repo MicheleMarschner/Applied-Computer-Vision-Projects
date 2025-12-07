@@ -139,7 +139,7 @@ def format_positions(positions):
     return ['{0: .4f}'.format(x) for x in positions]
 
 
-def create_subset(size, dataset):
+def create_random_subset(size, dataset):
     """
     Create a random subset of a given dataset.
 

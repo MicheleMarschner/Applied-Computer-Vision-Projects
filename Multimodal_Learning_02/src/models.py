@@ -42,7 +42,7 @@ class EmbedderMaxPool(nn.Module):
 
         return x
     
-    
+
 class EmbedderStrided(nn.Module):
     """
     Embedder where all spatial downsampling is done via stride-2 convolutions.
@@ -342,3 +342,121 @@ class LateNet(nn.Module):
         # Predict
         preds = self.fullyConnected(x_fused)           # (B, output_dim)
         return preds
+    
+
+class CILPBackbone(nn.Module):
+    def __init__(self, in_ch, embedder_cls=EmbedderMaxPool, feature_dim=128, emb_size=200):
+        super().__init__()
+
+        # Encoder
+        self.encoder = embedder_cls(in_ch=in_ch, feature_dim=feature_dim)
+
+        # Projection to CILP embedding space
+        self.dense_emb = nn.Sequential(
+            nn.Linear(self.encoder.flatten_dim, 512),
+            nn.ReLU(),
+            nn.Linear(512, emb_size)
+        )
+
+    def forward(self, x):
+        feats = self.encoder(x)          # (B, flatten_dim)
+        emb = self.dense_emb(feats)      # (B, emb_size)
+        return F.normalize(emb, dim=-1)  # unit-norm embeddings
+
+
+class ContrastivePretraining(nn.Module):
+    def __init__(self, img_embedder: nn.Module, lidar_embedder: nn.Module):
+        super().__init__()
+        self.img_embedder = img_embedder
+        self.lidar_embedder = lidar_embedder
+        self.cos = nn.CosineSimilarity(dim=-1)
+
+    def forward(self, rgb_imgs, lidar_depths):
+        # 1. Encode
+        img_emb = self.img_embedder(rgb_imgs)          # (B, D_cilp)
+        lidar_emb = self.lidar_embedder(lidar_depths)  # (B, D_cilp)
+
+        # 2. Pairwise cosine similarities, without hardcoding batch_size
+        #    shape: (B, 1, D_cilp) and (1, B, D_cilp) → broadcast → (B, B)
+        similarity = self.cos(
+            img_emb.unsqueeze(1),      # (B, 1, D_cilp)
+            lidar_emb.unsqueeze(0),    # (1, B, D_cilp)
+        )                              # (B, B)
+        # similarity = (similarity + 1) / 2         ## TODO: überlegen ob rein oder nicht
+
+        logits_per_img = similarity          # img → lidar      # (B,B)
+        logits_per_lidar = similarity.T      # lidar → img      # (B,B)
+
+        return logits_per_img, logits_per_lidar
+    
+
+class Projector(nn.Module):
+    """
+    Maps RGB embeddings -> LiDAR embedding space.
+    Used after CILP encoders are frozen.
+    """
+    def __init__(self, img_dim, lidar_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(img_dim, 1000),
+            nn.ReLU(),
+            nn.Linear(1000, 500),
+            nn.ReLU(),
+            nn.Linear(500, lidar_dim),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+    
+
+class Classifier(nn.Module):
+    def __init__(self, in_ch):
+        super().__init__()
+        kernel_size = 3
+        n_classes = 1
+
+        self.embedder = nn.Sequential(
+            nn.Conv2d(in_ch, 50, kernel_size, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),                                # 64 -> 32
+            nn.Conv2d(50, 100, kernel_size, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),                                # 32 -> 16
+            nn.Conv2d(100, 200, kernel_size, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),                                # 16 -> 8
+            nn.Conv2d(200, 200, kernel_size, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),                                # 8 -> 4
+            nn.Flatten()
+        )
+        self.classifier = nn.Sequential(
+            nn.Linear(200 * 4 * 4, 100),
+            nn.ReLU(),
+            nn.Linear(100, n_classes)
+        )
+
+    def get_embs(self, imgs):
+        return self.embedder(imgs)     # shape: (B, D_cilp*4*4) = (B, 3200)
+
+    def forward(self, raw_data=None, data_embs=None):
+        assert (raw_data is not None or data_embs is not None), "No images or embeddings given."
+        if raw_data is not None:
+            data_embs = self.get_embs(raw_data)
+        return self.classifier(data_embs)           # (B, 1)
+
+
+class RGB2LiDARClassifier(nn.Module):
+    def __init__(self, CILP, projector, lidar_cnn):
+        super().__init__()
+        self.img_embedder = CILP.img_embedder   # frozen
+        self.projector = projector              
+        self.shape_classifier = lidar_cnn             # pretrained LiDAR classifier
+
+    def forward(self, imgs):
+        with torch.no_grad():
+            img_encodings = self.img_embedder(imgs)           # (B, emb_dim)
+            proj_lidar_embs = self.projector(img_encodings)   # (B, emb_dim)
+        # lidar_cnn should have a forward mode that accepts embeddings
+        return self.shape_classifier(data_embs=proj_lidar_embs)
+
