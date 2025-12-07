@@ -191,7 +191,9 @@ def train_model(model, optimizer, input_fn, loss_fn, epochs, train_dataloader, v
     }
 
 
-def compute_class_weights(dataset, num_classes=2):
+
+
+def compute_class_weights_old(dataset, num_classes=2):
     """
     Compute inverse-frequency class weights from a dataset.
     """
@@ -286,7 +288,7 @@ def train_with_batch_loss(
 
     for epoch in range(epochs):
         start_time = time.time()
-        print(f"[{wandb_model_name or 'BatchLoss'}] Epoch {epoch+1}/{epochs}")
+        print(f"[{'BatchLoss'}] Epoch {epoch+1}/{epochs}")
 
         # ----- TRAIN -----
         model.train()
@@ -306,7 +308,7 @@ def train_with_batch_loss(
         valid_loss_epoch = 0.0
         with torch.no_grad():
             for step, batch in enumerate(val_dataloader):
-                loss = batch_loss_fn(model, batch, device)
+                loss, _ = batch_loss_fn(model, batch, device, **(extra_args or {}))
                 valid_loss_epoch += loss.item()
         valid_loss_epoch /= (step + 1)
         valid_losses.append(valid_loss_epoch)

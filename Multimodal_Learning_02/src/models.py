@@ -449,14 +449,13 @@ class Classifier(nn.Module):
 class RGB2LiDARClassifier(nn.Module):
     def __init__(self, CILP, projector, lidar_cnn):
         super().__init__()
-        self.img_embedder = CILP.img_embedder   # frozen
+        self.img_embedder = CILP.img_embedder         # frozen
         self.projector = projector              
-        self.shape_classifier = lidar_cnn             # pretrained LiDAR classifier
+        self.shape_classifier = lidar_cnn             # pretrained LiDAR classifier, frozen
 
     def forward(self, imgs):
-        with torch.no_grad():
-            img_encodings = self.img_embedder(imgs)           # (B, emb_dim)
-            proj_lidar_embs = self.projector(img_encodings)   # (B, emb_dim)
+        img_encodings = self.img_embedder(imgs)           # (B, emb_dim)
+        proj_lidar_embs = self.projector(img_encodings)   # (B, emb_dim)
         # lidar_cnn should have a forward mode that accepts embeddings
         return self.shape_classifier(data_embs=proj_lidar_embs)
 
