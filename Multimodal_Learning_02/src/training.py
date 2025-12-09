@@ -191,9 +191,7 @@ def train_model(model, optimizer, input_fn, loss_fn, epochs, train_dataloader, v
     }
 
 
-
-
-def compute_class_weights_old(dataset, num_classes=2):
+def compute_class_weights(dataset, num_classes=2):
     """
     Compute inverse-frequency class weights from a dataset.
     """
@@ -301,7 +299,7 @@ def train_with_batch_loss(
             train_loss_epoch += loss.item()
         train_loss_epoch /= (step + 1)
         train_losses.append(train_loss_epoch)
-        print(f"  train loss: {train_loss_epoch:.4f}")
+        print(f"train loss: {train_loss_epoch:.4f}")
 
         # ----- VALID -----
         model.eval()
@@ -312,7 +310,7 @@ def train_with_batch_loss(
                 valid_loss_epoch += loss.item()
         valid_loss_epoch /= (step + 1)
         valid_losses.append(valid_loss_epoch)
-        print(f"  valid loss: {valid_loss_epoch:.4f}")
+        print(f"valid loss: {valid_loss_epoch:.4f}")
 
         # Save best model
         if valid_loss_epoch < best_val_loss:
