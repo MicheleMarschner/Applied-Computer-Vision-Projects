@@ -15,4 +15,5 @@ pillow==11.3.0
 datasets==4.0.0
 open-clip-torch==2.24.0
 opencv-python==4.10.0.84
+open3d==0.18.0
 
