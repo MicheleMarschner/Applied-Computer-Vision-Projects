@@ -6,6 +6,7 @@ Diffusion_Model_03/data/
 wandb/
 Multimodal_Learning_02/wandb/
 Multimodal_Learning_02/notebooks/wandb/
+Diffusion_Model_03/wandb/
 
 # OS
 .DS_Store
