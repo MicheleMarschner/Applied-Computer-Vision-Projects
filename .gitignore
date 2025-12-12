@@ -1,1 +1,11 @@
-.env
+# external large resources
+Multimodal_Learning_02/multimodal_training_workshop/
+Diffusion_Model_03/data/
+
+# wandb junk
+wandb/
+Multimodal_Learning_02/wandb/
+Multimodal_Learning_02/notebooks/wandb/
+
+# OS
+.DS_Store
