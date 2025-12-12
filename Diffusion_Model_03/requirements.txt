@@ -1,0 +1,19 @@
+torch==2.9.0
+torchvision==0.20.0
+sympy==1.12
+wandb==0.23.1
+fiftyone==1.10.0
+tqdm==4.67.1
+scikit-learn==1.4.0
+numpy==2.0.2
+pillow==11.3.0
+datasets==4.0.0
+open-clip-torch==2.24.0
+huggingface-hub==1.1.5
+clip @ git+https://github.com/openai/CLIP.git
+
+
+
+
+
+
