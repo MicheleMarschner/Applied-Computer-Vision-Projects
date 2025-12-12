@@ -1,5 +1,6 @@
 # external large resources
-Multimodal_Learning_02/multimodal_training_workshop/
+Multimodal_Learning_02/data_transformed/
+Multimodal_Learning_02/data/
 Diffusion_Model_03/data/
 
 # wandb junk
