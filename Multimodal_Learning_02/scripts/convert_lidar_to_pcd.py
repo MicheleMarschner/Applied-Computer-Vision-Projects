@@ -144,7 +144,7 @@ def main():
     else:
         output_dir = dataset_path / 'pcd'
 
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Output directory: {output_dir}")
 
     # Get all .npy files in lidar directory

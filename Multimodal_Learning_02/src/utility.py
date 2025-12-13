@@ -5,6 +5,9 @@ from torch.utils.data import Subset
 import numpy as np
 import cv2
 import albumentations as A
+from pathlib import Path
+import shutil
+import subprocess
 
 
 def set_seeds(seed=51):
@@ -156,3 +159,64 @@ def create_random_subset(size, dataset):
 
 
 
+    """
+    Check whether cached LiDAR point clouds (PCD) are available.
+    """
+    pcd_dir = cache_dir / "cubes" / "pcd"
+    return pcd_dir.exists() and any(pcd_dir.glob("*.pcd"))
+
+
+def has_cached_pointclouds(cache_dir: Path, classes=("cubes", "spheres")) -> bool:
+    """
+    Check whether cached LiDAR point clouds (PCD) are available.
+    """
+    # Check cache for all requested classes
+    for cls in classes:
+        pcd_dir = cache_dir / cls / "pcd"
+        if not (pcd_dir.exists() and any(pcd_dir.glob("*.pcd"))):
+            return False
+    return True
+
+
+def prepare_lidar_pointclouds(
+    raw_dataset_dir: Path,
+    local_pointcloud_dir: Path,
+    cache_dir: Path,
+    converter_script: Path,
+    classes=("cubes", "spheres"),
+):
+    """
+    Prepare LiDAR point clouds for local use.
+
+    If cached point clouds exist, they are copied from the cache directory.
+    Otherwise, point clouds are generated from raw depth data and can later
+    be persisted as cache.
+
+    Returns:
+        str: "cache" if loaded from cache, "computed" if newly generated.
+    """
+    if has_cached_pointclouds(cache_dir, classes):
+        print("📦 Loading cached LiDAR point clouds")
+        shutil.copytree(cache_dir, local_pointcloud_dir, dirs_exist_ok=True)
+        return "cache"
+
+    print("⚙️ Computing LiDAR point clouds from raw data")
+    local_pointcloud_dir.mkdir(parents=True, exist_ok=True)
+
+    for cls in classes:
+        input_dir = raw_dataset_dir / cls
+        output_dir = local_pointcloud_dir / cls / "pcd"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        subprocess.run(
+            [
+                "python",
+                str(converter_script),
+                str(input_dir),
+                "--output-dir",
+                str(output_dir),
+            ],
+            check=True,
+        )
+
+    return "computed"

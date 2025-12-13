@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import fiftyone as fo
 
 from src.utility import format_positions
 
@@ -181,3 +182,105 @@ def build_pairwise_downsampling_tables(metrics, name_map):
         tables[display_name] = df
 
     return tables
+
+
+def build_grouped_dataset(name: str, pairs: dict, persistent: bool = True, overwrite: bool = True):
+    """
+    Build a grouped FiftyOne dataset with slices: 'rgb' and 'lidar' from matched pairs.
+
+    Args:
+        name: FiftyOne dataset name.
+        pairs: dict[class_name -> list[{stem, rgb, lidar}]] as returned by match_lidar_rgb.
+        persistent: whether to persist the dataset in FiftyOne.
+        overwrite: delete existing dataset with same name.
+
+    Returns:
+        fiftyone.core.dataset.Dataset
+    """
+
+    # Delete existing dataset if it exists
+    if overwrite and name in fo.list_datasets():
+        print(f"Deleting existing dataset: {name}")
+        fo.delete_dataset(name)
+
+    # Create new grouped dataset
+    print(f"Creating new dataset: {name}")
+    dataset = fo.Dataset(name, persistent=persistent)
+    dataset.add_group_field("group", default="rgb")
+
+    print(f"✅ Created grouped dataset: {name}")
+    
+    samples = []
+    for class_name, class_pairs in pairs.items():
+        label_str = "cube" if class_name == "cubes" else "sphere"
+
+        for item in class_pairs:
+            # Create group
+            group = fo.Group()
+
+            # Create RGB sample
+            rgb_sample = fo.Sample(
+                filepath=str(item["rgb"]),
+                group=group.element("rgb"),
+                label=fo.Classification(label=label_str),
+            )
+
+            # Create PCD sample
+            pcd_sample = fo.Sample(
+                filepath=str(item["lidar"]),
+                group=group.element("lidar"),
+                label=fo.Classification(label=label_str),
+            )
+
+            samples.extend([rgb_sample, pcd_sample])
+
+    # Add all samples to dataset
+    dataset.add_samples(samples)
+
+    return dataset
+
+
+def plot_class_distributions(
+    total_per_class: dict,
+    splits: dict,
+    split_names=("train", "val"),
+    figsize=(8, 6),
+    title_full="Class distribution (full dataset)",
+    title_splits="Train vs Validation",
+):
+    # --- Data ---
+    class_names = list(total_per_class.keys())
+    counts_full = [total_per_class[c] for c in class_names]
+
+    split1_name, split2_name = split_names
+    split1_counts = [len(splits[split1_name][c]) for c in class_names]
+    split2_counts = [len(splits[split2_name][c]) for c in class_names]
+
+    # --- Plot ---
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+
+    # left: full dataset distribution
+    axes[0].bar(class_names, counts_full, color="steelblue")
+    axes[0].set_title(title_full)
+    axes[0].set_xlabel("Class")
+    axes[0].set_ylabel("Count")
+
+    # right: train vs validation split
+    x = range(len(class_names))
+    width = 0.35
+
+    axes[1].bar([i - width/2 for i in x], split1_counts, width=width, label=split1_name.capitalize())
+    axes[1].bar([i + width/2 for i in x], split2_counts, width=width, label=split2_name.capitalize())
+    axes[1].set_xticks(x)
+    axes[1].set_xticklabels(class_names)
+    axes[1].set_title(title_splits)
+    axes[1].set_xlabel("Class")
+    axes[1].legend()
+
+    # show plots
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=0.4)
+    plt.show()
+
+    return fig, axes
+

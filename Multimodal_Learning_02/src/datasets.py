@@ -288,6 +288,52 @@ class AssessmentCILPDataset(Dataset):
             self.lidar[idx],
             self.class_idx[idx],
         )
+    
+
+def match_lidar_rgb(classes, rgb_root: Path, pcd_root: Path):
+    """
+    Match RGB (.png) and LiDAR (.pcd) files by filename stem per class.
+
+    Returns:
+        dict[class_name, list[dict]] with keys: "stem", "rgb", "lidar".
+    """
+    pairs = {}
+
+    for class_name in classes:
+        rgb_dir = rgb_root / class_name / "rgb"
+        pcd_dir = pcd_root / class_name / "pcd"
+
+        # Check if directories exist
+        assert rgb_dir.exists(), f"RGB directory not found: {rgb_dir}"
+        assert pcd_dir.exists(), f"PCD directory not found: {pcd_dir}"
+
+        # Collect files
+        rgb_files = sorted(rgb_dir.glob("*.png"))
+        pcd_files = sorted(pcd_dir.glob("*.pcd"))
+
+        print(f"[{class_name}] RGB: {len(rgb_files)} | PCD: {len(pcd_files)}")
+
+        # Match by stem
+        rgb_stems = {f.stem for f in rgb_files}
+        pcd_stems = {f.stem for f in pcd_files}
+        matching = rgb_stems & pcd_stems
+
+        # Store matched pairs
+        pairs[class_name] = [
+            {
+                "stem": stem,
+                "rgb": rgb_dir / f"{stem}.png",
+                "lidar": pcd_dir / f"{stem}.pcd",
+            }
+            for stem in sorted(matching)
+        ]
+
+        if len(matching) == 0:
+            print(f"⚠️  No matching pairs found for class '{class_name}'")
+        else:
+            print(f"✅ {class_name}: {len(matching)} matched pairs")
+
+    return pairs
 
 
 def compute_dataset_mean_std(root_dir, img_size=64):
