@@ -166,7 +166,7 @@ def create_random_subset(size, dataset):
     return pcd_dir.exists() and any(pcd_dir.glob("*.pcd"))
 
 
-def has_cached_pointclouds(cache_dir: Path, classes=("cubes", "spheres")) -> bool:
+def has_cached_pointclouds(cache_dir: Path, classes=["cubes", "spheres"]) -> bool:
     """
     Check whether cached LiDAR point clouds (PCD) are available.
     """
@@ -183,7 +183,7 @@ def prepare_lidar_pointclouds(
     local_pointcloud_dir: Path,
     cache_dir: Path,
     converter_script: Path,
-    classes=("cubes", "spheres"),
+    classes=["cubes", "spheres"],
 ):
     """
     Prepare LiDAR point clouds for local use.
