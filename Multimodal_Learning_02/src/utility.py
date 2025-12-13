@@ -196,11 +196,11 @@ def prepare_lidar_pointclouds(
         str: "cache" if loaded from cache, "computed" if newly generated.
     """
     if has_cached_pointclouds(cache_dir, classes):
-        print("📦 Loading cached LiDAR point clouds")
+        print("Loading cached LiDAR point clouds")
         shutil.copytree(cache_dir, local_pointcloud_dir, dirs_exist_ok=True)
         return "cache"
 
-    print("⚙️ Computing LiDAR point clouds from raw data")
+    print("Computing LiDAR point clouds from raw data")
     local_pointcloud_dir.mkdir(parents=True, exist_ok=True)
 
     for cls in classes:

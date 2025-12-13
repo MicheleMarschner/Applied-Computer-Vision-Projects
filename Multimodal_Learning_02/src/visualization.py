@@ -248,6 +248,12 @@ def plot_class_distributions(
     title_full="Class distribution (full dataset)",
     title_splits="Train vs Validation",
 ):
+    """
+    Plot class distributions for the full dataset and for two dataset splits.
+
+    Creates a two-panel bar chart showing (1) total samples per class and
+    (2) class counts in two splits (e.g., train vs validation).
+    """
     # --- Data ---
     class_names = list(total_per_class.keys())
     counts_full = [total_per_class[c] for c in class_names]
