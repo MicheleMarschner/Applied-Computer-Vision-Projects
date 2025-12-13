@@ -1,0 +1,14 @@
+# external large resources
+Multimodal_Learning_02/data_transformed/
+Multimodal_Learning_02/data/
+Diffusion_Model_03/data/
+Diffusion_Model_03/checkpoints/
+
+# wandb junk
+wandb/
+Multimodal_Learning_02/wandb/
+Multimodal_Learning_02/notebooks/wandb/
+Diffusion_Model_03/wandb/
+
+# OS
+.DS_Store
