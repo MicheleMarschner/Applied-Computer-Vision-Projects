@@ -34,8 +34,6 @@ class AssessmentDataset(Dataset):
         seed=51
     ):
         self.root_dir = Path(root_dir)
-
-        # These MUST be deterministic transforms (Resize, ToTensor, Normalize...)
         self.transform_rgb = transform_rgb
         self.transform_lidar = transform_lidar
 
@@ -43,17 +41,17 @@ class AssessmentDataset(Dataset):
         self.label_map = {"cubes": 0, "spheres": 1}
 
         samples = []
+
+        ## !
         self.az = {}
         self.ze = {}
 
         print(f"Scanning RAW dataset in {root_dir}...")
 
-        # -------- 1. Scan the dataset & load azimuth/zenith --------
+        # Scan the dataset & load azimuth/zenith
         for cls in self.classes:
             cls_dir   = self.root_dir / cls
-            rgb_dir   = cls_dir / "rgb"
-            lidar_dir = cls_dir / "lidar"
-
+            
             # load az/zen
             az_path = cls_dir / "azimuth.npy"
             ze_path = cls_dir / "zenith.npy"
@@ -63,25 +61,25 @@ class AssessmentDataset(Dataset):
             self.az[cls] = torch.from_numpy(np.load(az_path)).float()
             self.ze[cls] = torch.from_numpy(np.load(ze_path)).float()
 
-            # match stems
-            rgb_files   = sorted(rgb_dir.glob("*.png"))
-            lidar_files = sorted(lidar_dir.glob("*.npy"))
+            # find matching rgb and lidar files
+            pairs_by_class = find_matching_files(
+                classes=self.classes,
+                rgb_root=self.root_dir,
+                lidar_root=self.root_dir,
+                rgb_subdir="rgb",
+                lidar_subdir="lidar",
+                rgb_ext="png",
+                lidar_ext="npy",
+            )
 
-            rgb_stems   = {f.stem for f in rgb_files}
-            lidar_stems = {f.stem for f in lidar_files}
-            matching    = sorted(rgb_stems & lidar_stems)
-
-            print(f"{cls}: {len(matching)} paired samples")
-
-            for stem in matching:
-                samples.append(
-                    {
-                        "class": cls,
-                        "rgb_path": rgb_dir / f"{stem}.png",
-                        "depth_path": lidar_dir / f"{stem}.npy",
-                        "label": self.label_map[cls],
-                    }
-                )
+            for cls in self.classes:
+                cls_pairs = pairs_by_class[cls]
+                for p in cls_pairs:
+                    samples.append({
+                            "rgb_path": p["rgb"],
+                            "depth_path": p["lidar"],
+                            "label": self.label_map[cls],
+                        })
 
         # -------- Optional shuffle --------
         if shuffle:
@@ -176,23 +174,25 @@ class AssessmentXYZADataset(Dataset):
         samples = []
 
         print(f"Scanning dataset in {root_dir}...")
+
+        pairs_by_class = find_matching_files(
+            classes=self.classes,
+            rgb_root=self.root_dir,
+            lidar_root=self.root_dir,
+            rgb_subdir="rgb",
+            lidar_subdir="lidar_xyza",
+            rgb_ext="png",
+            lidar_ext="npy",
+        )
+
         for cls in self.classes:
-            cls_dir = self.root_dir / cls
-            rgb_dir = cls_dir / "rgb"
-            lidar_dir = cls_dir / "lidar_xyza"
-
-            rgb_files = sorted(rgb_dir.glob("*.png"))
-            print(f"{cls}: {len(rgb_files)} RGB files found. Matching XYZA...")
-
-            for rgb_path in tqdm(rgb_files, desc=f"{cls} matching", leave=False):
-                stem = rgb_path.stem
-                lidar_path = lidar_dir / f"{stem}.npy"
-                if lidar_path.exists():
-                    samples.append({
-                        "rgb": rgb_path,
-                        "lidar_xyza": lidar_path,
-                        "label": self.label_map[cls],
-                    })
+            cls_pairs = pairs_by_class[cls]
+            for p in cls_pairs:
+                samples.append({
+                    "rgb": p["rgb"],
+                    "lidar_xyza": p["lidar"],
+                    "label": self.label_map[cls],
+                })
 
         if shuffle:
             rng = random.Random(seed)
@@ -287,7 +287,14 @@ class AssessmentCILPDataset(Dataset):
         )
     
 
-def match_lidar_rgb(classes, rgb_root: Path, pcd_root: Path):
+def find_matching_files(classes, 
+                        rgb_root: Path, 
+                        lidar_root: Path, 
+                        rgb_subdir: Path, 
+                        lidar_subdir: Path, 
+                        rgb_ext="png", 
+                        lidar_ext="npy"
+):
     """
     Match RGB (.png) and LiDAR (.pcd) files by filename stem per class.
 
@@ -297,30 +304,30 @@ def match_lidar_rgb(classes, rgb_root: Path, pcd_root: Path):
     pairs = {}
 
     for class_name in classes:
-        rgb_dir = rgb_root / class_name / "rgb"
-        pcd_dir = pcd_root / class_name / "pcd"
+        rgb_dir = rgb_root / class_name / rgb_subdir
+        lidar_dir = lidar_root / class_name / lidar_subdir
 
         # Check if directories exist
         assert rgb_dir.exists(), f"RGB directory not found: {rgb_dir}"
-        assert pcd_dir.exists(), f"PCD directory not found: {pcd_dir}"
+        assert lidar_dir.exists(), f"PCD directory not found: {lidar_dir}"
 
         # Collect files
-        rgb_files = sorted(rgb_dir.glob("*.png"))
-        pcd_files = sorted(pcd_dir.glob("*.pcd"))
+        rgb_files = sorted(rgb_dir.glob(f"*.{rgb_ext}"))
+        lidar_files = sorted(lidar_dir.glob(f"*.{lidar_ext}"))
 
-        print(f"[{class_name}] RGB: {len(rgb_files)} | PCD: {len(pcd_files)}")
+        print(f"[{class_name}] RGB: {len(rgb_files)} | PCD: {len(lidar_files)}")
 
         # Match by stem
         rgb_stems = {f.stem for f in rgb_files}
-        pcd_stems = {f.stem for f in pcd_files}
-        matching = rgb_stems & pcd_stems
+        lidar_stems = {f.stem for f in lidar_files}
+        matching = rgb_stems & lidar_stems
 
         # Store matched pairs
         pairs[class_name] = [
             {
                 "stem": stem,
-                "rgb": rgb_dir / f"{stem}.png",
-                "lidar": pcd_dir / f"{stem}.pcd",
+                "rgb": rgb_dir / f"{stem}.{rgb_ext}",
+                "lidar": lidar_dir / f"{stem}.{lidar_ext}",
             }
             for stem in sorted(matching)
         ]

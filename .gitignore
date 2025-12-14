@@ -2,6 +2,7 @@
 Multimodal_Learning_02/data_transformed/
 Multimodal_Learning_02/data/
 Multimodal_Learning_02/checkpoints/
+Multimodal_Learning_02/src/datasets_copy.py
 Diffusion_Model_03/data/
 Diffusion_Model_03/checkpoints/
 

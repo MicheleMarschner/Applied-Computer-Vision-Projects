@@ -212,6 +212,20 @@ def compute_class_weights(dataset, num_classes=2):
     return class_weights
 
 
+def compute_pos_weight_from_dataset(dataset):
+    """
+    Compute pos_weight for BCEWithLogitsLoss from dataset labels.
+    """
+    labels = torch.tensor([sample["label"] for sample in dataset.samples],
+                          dtype=torch.long)
+
+    class_counts = torch.bincount(labels, minlength=2).float()
+    num_neg, num_pos = class_counts[0], class_counts[1]
+
+    pos_weight = num_neg / (num_pos + 1e-6)
+    return pos_weight
+
+
 def get_inputs(batch, device=None):
     """
     Prepare inputs for intermediate/late fusion models.
@@ -368,7 +382,12 @@ def train_classifier_with_acc(
     Logs per-epoch loss, accuracy, timing, GPU memory, and saves the best model
     based on validation loss.
     """
-    bce = nn.BCEWithLogitsLoss()
+
+    # compute positive class weight
+    pos_weight = compute_pos_weight_from_dataset(train_dataloader.dataset)
+    pos_weight = torch.tensor([pos_weight], device=device)
+
+    bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     train_losses, val_losses, val_accs, epoch_times = [], [], [], []
     best_val_loss = float("inf")
