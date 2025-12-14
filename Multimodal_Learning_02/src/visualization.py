@@ -30,6 +30,19 @@ def print_loss(epoch, loss, outputs, target, is_train=True, is_debug=False):
         print("example real:", format_positions(target[0].tolist()))
 
 
+def plot_val_losses(loss_dict, title="Validation Loss per Model", figsize=(8,5)):
+    fig, ax = plt.subplots(figsize=figsize)
+    for model_name, losses in loss_dict.items():
+        ax.plot(losses, label=model_name)
+    ax.set_title(title)
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Validation Loss")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    return fig, ax
+
+
 def plot_losses(losses, title="Training & Validation Loss", figsize=(10, 6)):
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -350,12 +363,15 @@ def plot_retrieval_examples(
     k_eff = int(min(k, len(idx_show)))
 
     # ---- build wandb.Table lazily (so function can be used without wandb init) ----
-    table = wandb.Table(columns=[
-        "RGB index", "Predicted LiDAR index", "GT LiDAR index", "Correct", "Confidence"
-    ])
+    table = wandb.Table(columns=["RGB", "Retrieved LiDAR", "i", "pred", "gt", "correct", "conf"])
+
     for i in idx_show[:k_eff]:
         i = int(i)
-        table.add_data(i, int(preds[i]), int(gt[i]), bool(correct_mask[i]), float(conf[i].item()))
+        table.add_data(
+            wandb.Image(rgb_img),
+            wandb.Image(lidar_img, caption=f"p={c:.2f}"),
+            i, int(preds[i]), int(gt[i]), bool(is_correct), float(conf[i].item()),
+        )
 
     # ---- plot 2 x k grid ----
     fig, axes = plt.subplots(2, k_eff, figsize=(2.8 * k_eff, 5.2))

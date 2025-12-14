@@ -192,9 +192,14 @@ You can view all experiment runs, metrics, and logged artifacts in the public W&
 
 ## 3. Summary of Results
 
-| Model | Accuracy | F1 Score | Loss | Notes |
-|-------|----------|----------|------|-------|
-| Example |  —  |  —  |  —  |  —  |
+|index|Fusion Strategy|Avg Valid Loss|Best Valid Loss|Num of params|Avg time per epoch \(min:s\)|GPU Memory \(MB, max\)|
+|---|---|---|---|---|---|---|
+|2|Intermediate \(Multiplicative\)|0\.004644939282495102|2\.4982889982538836e-05|8480374|12\.240497700373332|643\.09326171875|
+|3|Intermediate \(Hadamard\)|0\.006204736781321193|2\.4813138145418635e-05|8480374|12\.126800632476806|675\.44580078125|
+|4|Intermediate \(Add\)|0\.007138626582442764|2\.657566869856964e-06|8480374|11\.83696174621582|707\.79833984375|
+|1|Intermediate \(Concat\)|0\.007649161905599914|7\.3513094321242535e-06|16672374|12\.830955584843954|672\.74072265625|
+|5|Late Fusion|0\.010324423174076098|1\.6279250530715216e-06|16672374|12\.34416480064392|833\.40087890625|
+|0|Early Fusion|0\.024814127246675827|0\.00048587562268949115|8387990|11\.783955907821655|497\.78515625|
 
 (Add more tables if needed.)
 
