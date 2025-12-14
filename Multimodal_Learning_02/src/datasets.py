@@ -42,7 +42,6 @@ class AssessmentDataset(Dataset):
 
         samples = []
 
-        ## !
         self.az = {}
         self.ze = {}
 
@@ -76,12 +75,13 @@ class AssessmentDataset(Dataset):
                 cls_pairs = pairs_by_class[cls]
                 for p in cls_pairs:
                     samples.append({
+                            "class": cls,
                             "rgb_path": p["rgb"],
                             "depth_path": p["lidar"],
                             "label": self.label_map[cls],
                         })
 
-        # -------- Optional shuffle --------
+        # Optional shuffle
         if shuffle:
             rng = random.Random(seed)
             rng.shuffle(samples)
@@ -95,7 +95,7 @@ class AssessmentDataset(Dataset):
         self.lidar_tensors = []
         self.labels = []
 
-        # -------- 2. PRECOMPUTE EVERYTHING --------
+        # Precompute everything
         print("Precomputing RGB + XYZA tensors into RAM...")
 
         for item in tqdm(self.samples, desc="Preprocessing"):
@@ -103,14 +103,14 @@ class AssessmentDataset(Dataset):
             az  = self.az[cls]
             ze  = self.ze[cls]
 
-            # --- RGB ---
+            # RGB
             rgb_img = Image.open(item["rgb_path"])
             if self.transform_rgb:
                 rgb_tensor = self.transform_rgb(rgb_img)  # applied once
             else:
                 rgb_tensor = transforms.ToTensor()(rgb_img)
 
-            # --- LiDAR XYZA ---
+            # LiDAR XYZA
             depth_np = np.load(item["depth_path"])
             depth_t  = torch.from_numpy(depth_np).float()
             xyza = get_torch_xyza(depth_t, az, ze)        # (4,H,W)
@@ -124,7 +124,7 @@ class AssessmentDataset(Dataset):
 
         print(f"Dataset ready: {len(self.samples)} samples preprocessed.")
 
-    # -------- Fast loaders --------
+    # Fast loaders
     def __len__(self):
         return len(self.samples)
 
@@ -134,111 +134,6 @@ class AssessmentDataset(Dataset):
             self.lidar_tensors[idx],
             torch.tensor(self.labels[idx], dtype=torch.long),
         )
-
-
-## Final: überdenken woher datenset kommen soll
-class AssessmentXYZADataset(Dataset):
-    """
-    Dataset for the CILP XYZ + RGB assessment data.
-
-    It expects the following folder structure:
-
-        root/
-          cubes/
-            rgb/*.png
-            lidar_xyza/*.npy
-          spheres/
-            rgb/*.png
-            lidar_xyza/*.npy
-
-    Each sample consists of an RGB image, a LiDAR XYZA tensor and a class label.
-    """
-    def __init__(self, root_dir, start_idx=0, end_idx=None,
-                 transform_rgb=None, transform_lidar=None, shuffle=True, seed=51):
-        """
-        Args:
-            root_dir (str or Path): Root directory of the dataset.
-            start_idx (int): Start index (inclusive) for slicing the dataset.
-            end_idx (int or None): End index (exclusive); if None use all.
-            transform_rgb (callable or None): Transform applied to RGB images.
-            transform_lidar (callable or None): Transform applied to LiDAR tensors.
-            shuffle (bool): If True, shuffle the full list of samples once.
-        """
-        self.root_dir = Path(root_dir)
-        self.transform_rgb = transform_rgb
-        self.transform_lidar = transform_lidar
-
-        self.classes = ["cubes", "spheres"]
-        self.label_map = {"cubes": 0, "spheres": 1}
-
-        samples = []
-
-        print(f"Scanning dataset in {root_dir}...")
-
-        pairs_by_class = find_matching_files(
-            classes=self.classes,
-            rgb_root=self.root_dir,
-            lidar_root=self.root_dir,
-            rgb_subdir="rgb",
-            lidar_subdir="lidar_xyza",
-            rgb_ext="png",
-            lidar_ext="npy",
-        )
-
-        for cls in self.classes:
-            cls_pairs = pairs_by_class[cls]
-            for p in cls_pairs:
-                samples.append({
-                    "rgb": p["rgb"],
-                    "lidar_xyza": p["lidar"],
-                    "label": self.label_map[cls],
-                })
-
-        if shuffle:
-            rng = random.Random(seed)
-            rng.shuffle(samples)
-
-        if end_idx is None:
-            end_idx = len(samples)
-        self.samples = samples[start_idx:end_idx]
-
-        # Preload LiDAR tensors into memory since they are small and fast to cache
-        print(f"Preloading LiDAR XYZA tensors into RAM...")
-        self.lidar_tensors = []
-        for item in tqdm(self.samples, desc="Loading XYZA", leave=False):
-            lidar_np = np.load(item["lidar_xyza"])        # (4, H, W)
-            lidar_t  = torch.from_numpy(lidar_np).float() # CPU tensor
-            self.lidar_tensors.append(lidar_t)
-
-        print(
-            f"Dataset ready: {len(self.samples)} samples loaded.\n"
-            f"Slice [{start_idx}:{end_idx}]"
-        )
-
-    def __len__(self):
-        """Return the number of samples in this dataset slice."""
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        """
-        Load a single (rgb, lidar, label) triplet.
-
-        Returns:
-            tuple: (rgb_tensor, lidar_tensor, label_tensor)
-        """
-        item  = self.samples[idx]
-        lidar = self.lidar_tensors[idx]
-
-        # RGB image is loaded on the fly
-        rgb = Image.open(item["rgb"])
-        if self.transform_rgb:
-            rgb = self.transform_rgb(rgb)
-
-        if self.transform_lidar:
-            lidar = self.transform_lidar(lidar)
-
-        label = torch.tensor(item["label"], dtype=torch.long)
-        return rgb, lidar, label
 
 
 class AssessmentCILPDataset(Dataset):
@@ -358,7 +253,7 @@ def compute_dataset_mean_std(root_dir, img_size=64):
       transforms.ToDtype(torch.float32, scale=True),  # [0,1], 4 channels
     ])
 
-    stats_dataset = AssessmentXYZADataset(
+    stats_dataset = AssessmentDataset(
         root_dir=root_dir,
         start_idx=0,
         end_idx=None,          # or e.g. 1000 to subsample
@@ -402,7 +297,7 @@ def get_dataloaders(root_dir, valid_batches, num_workers=2, test_frac=0.15, batc
     """
 
     # 1) Base dataset: no internal shuffle, full range
-    base_dataset = AssessmentDataset(           # AssessmentXYZADataset
+    base_dataset = AssessmentDataset(
         root_dir,
         start_idx=0,
         end_idx=None,
