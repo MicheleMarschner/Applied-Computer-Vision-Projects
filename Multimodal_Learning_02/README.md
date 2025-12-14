@@ -201,6 +201,32 @@ You can view all experiment runs, metrics, and logged artifacts in the public W&
 |4|Intermediate \(Add\)|0\.0029|1\.0505e-07|8480374|13\.1532|707\.7983|
 |5|Late Fusion|0\.0070|1\.5497e-07|16672374|15\.6503|833\.4009|
 
+
+
+**Early Fusion:**
+|index|Metric|MaxPool2d|Strided Conv|Difference \(Strided - MaxPool\)|
+|---|---|---|---|---|
+|0|Validation Loss \(best\)|5\.9752e-07|7\.1077e-07|1\.1325e-07|
+|1|Parameters|8387990\.0|8387990\.0|0\.0|
+|2|Training Time \(s\)|136\.3252|129\.5581|-6\.7671|
+|3|Final Accuracy|1\.0|1\.0|0\.0|
+
+**Intermediate Fusion (Concat):**
+|index|Metric|MaxPool2d|Strided Conv|Difference \(Strided - MaxPool\)|
+|---|---|---|---|---|
+|0|Validation Loss \(best\)|1\.3411e-08|4\.7867e-06|4\.7733e-06|
+|1|Parameters|16672374\.0|16672374\.0|0\.0|
+|2|Training Time \(s\)|218\.2184|168\.5268|-49\.6916|
+|3|Final Accuracy|1\.0|1\.0|0\.0|
+
+**Late Fusion:**
+|index|Metric|MaxPool2d|Strided Conv|Difference \(Strided - MaxPool\)|
+|---|---|---|---|---|
+|0|Validation Loss \(best\)|1\.2889e-07|5\.1322e-06|5\.0033e-06|
+|1|Parameters|16672374\.0|16672374\.0|0\.0|
+|2|Training Time \(s\)|217\.3971|169\.4651|-47\.9319|
+|3|Final Accuracy|1\.0|1\.0|0\.0|
+
 ---
 
 ## 4. Instructions to Reproduce Results
