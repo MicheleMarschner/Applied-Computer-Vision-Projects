@@ -392,53 +392,6 @@ def compute_dataset_mean_std(root_dir, img_size=64):
     return mean, std
 
 
-def compute_dataset_mean_std_neu(root_dir, img_size=64, seed=51):
-    """
-    Estimate the per-channel mean and std for the RGB+LiDAR data.
-
-    Args:
-        root_dir (str or Path): Root directory passed to AssessmentXYZADataset.
-
-    Returns:
-        tuple[torch.Tensor, torch.Tensor]:
-            mean and std tensors with shape (C,).
-    """
-    stats_transforms = transforms.Compose([
-        transforms.Resize(img_size),
-        transforms.ToImage(),
-        transforms.ToDtype(torch.float32, scale=True),  # [0,1], 4 channels
-    ])
-
-    stats_dataset = AssessmentXYZADataset(
-        root_dir=root_dir,
-        transform_rgb=stats_transforms,
-        transform_lidar=None,
-        shuffle=False,
-        seed=seed
-    )
-
-    subset_size = min(2000, len(stats_dataset)*0.3)
-    subset_for_stats = create_random_subset(size=subset_size, dataset=stats_dataset)
-
-    loader = DataLoader(subset_for_stats, batch_size=64, shuffle=False)
-
-    # Accumulate running sum and sum of squares to compute mean/std
-    channel_sum = torch.zeros(4)
-    channel_sq_sum = torch.zeros(4)
-    num_pixels = 0
-
-    for rgb, _, _ in tqdm(loader, desc="Computing mean/std"):
-        # rgb shape: (B, C, H, W)
-        b, c, h, w = rgb.shape
-        num_pixels += b * h * w
-        channel_sum += rgb.sum(dim=[0, 2, 3])
-        channel_sq_sum += (rgb ** 2).sum(dim=[0, 2, 3])
-
-    mean = channel_sum / num_pixels
-    std = torch.sqrt(channel_sq_sum / num_pixels - mean ** 2)
-    return mean, std
-
-
 def get_dataloaders(root_dir, valid_batches, num_workers=2, test_frac=0.15, batch_size=64, img_transforms=None, seed=51):
     """
     Create train / val / test datasets + dataloaders.
@@ -449,7 +402,7 @@ def get_dataloaders(root_dir, valid_batches, num_workers=2, test_frac=0.15, batc
     """
 
     # 1) Base dataset: no internal shuffle, full range
-    base_dataset = AssessmentXYZADataset(
+    base_dataset = AssessmentDataset(           # AssessmentXYZADataset
         root_dir,
         start_idx=0,
         end_idx=None,
