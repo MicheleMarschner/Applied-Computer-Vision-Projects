@@ -30,61 +30,18 @@ def print_loss(epoch, loss, outputs, target, is_train=True, is_debug=False):
         print("example real:", format_positions(target[0].tolist()))
 
 
-## Final: löschen
-def plot_losses(losses, title="Training & Validation Loss Comparison", figsize=(10,6)):
-    """
-    Legacy plotting helper to show train/valid losses for multiple models.
-
-    Args:
-        losses (dict): Mapping model_name -> {"train_losses": [...],
-                                              "valid_losses": [...]}.
-        title (str): Plot title.
-        figsize (tuple): Matplotlib figure size.
-    """
-    plt.figure(figsize=figsize)
+def plot_losses(losses, title="Training & Validation Loss", figsize=(10, 6)):
+    fig, ax = plt.subplots(figsize=figsize)
 
     for model_name, log in losses.items():
-        train = log["train_losses"]
-        valid = log["valid_losses"]
+        ax.plot(log["train_losses"], label=f"{model_name} - train", linewidth=2)
+        ax.plot(log["valid_losses"], label=f"{model_name} - val", linestyle="--", linewidth=2)
 
-        # plot train + valid with different line styles
-        plt.plot(train, label=f"{model_name} - train", linewidth=2)
-        plt.plot(valid, label=f"{model_name} - valid", linestyle="--", linewidth=2)
-
-    plt.title(title, fontsize=16)
-    plt.xlabel("Epochs", fontsize=14)
-    plt.ylabel("Loss", fontsize=14)
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_losses(loss_dict, title="Validation Loss per Model", ylabel="Loss", xlabel="Epoch"):
-    """
-    Plot validation loss curves for multiple models.
-
-    Args:
-        loss_dict (dict): Mapping "model_name" -> list_of_losses (same length).
-        title (str): Plot title.
-        ylabel (str): Label for y-axis.
-        xlabel (str): Label for x-axis.
-    """
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    # Auto-generate x-axis based on first model
-    any_key = next(iter(loss_dict))
-    epochs = range(len(loss_dict[any_key]))
-
-    for model_name, losses in loss_dict.items():
-        ax.plot(epochs, losses, label=model_name)
-
-    ax.xlabel(xlabel)
-    ax.ylabel(ylabel)
-    ax.title(title)
+    ax.set_title(title)
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    ax.grid(True, alpha=0.3)
     ax.legend()
-    ax.grid(True, linestyle="--", alpha=0.3)
-    
     fig.tight_layout()
     return fig, ax
 
@@ -341,7 +298,7 @@ def plot_retrieval_examples(
     dataloader,
     device,
     k=5,
-    mode="mismatches_then_correct",  # "correct" | "mismatches" | "mismatches_then_correct" | "random"
+    mode="correct",  # "correct" | "mismatches" | "random"
     normalize="softmax",             # None | "softmax"
     temperature=1.0,
     title="RGB → LiDAR retrieval examples",
@@ -412,8 +369,18 @@ def plot_retrieval_examples(
         c = float(conf[i].item())
 
         # RGB query
-        rgb_img = rgb[i].permute(1, 2, 0).detach().cpu().numpy()
-        rgb_img = np.clip(rgb_img, 0, 1)
+        x = rgb[i].detach()
+
+        # make it 3-channel for display
+        if x.shape[0] == 4:
+            x = x[:3]                 # drop alpha / extra channel
+        elif x.shape[0] == 1:
+            x = x.repeat(3, 1, 1)
+
+        mean = torch.tensor([0.485, 0.456, 0.406], device=x.device)[:, None, None]
+        std  = torch.tensor([0.229, 0.224, 0.225], device=x.device)[:, None, None]
+
+        rgb_img = (x * std + mean).clamp(0, 1).permute(1, 2, 0).cpu().numpy()
         axes[0, col].imshow(rgb_img)
         axes[0, col].set_title(f"RGB {i}")
         axes[0, col].axis("off")
@@ -421,7 +388,7 @@ def plot_retrieval_examples(
         # Retrieved LiDAR (depth map)
         lidar_img = lidar[p].squeeze().detach().cpu().numpy()
         axes[1, col].imshow(lidar_img, cmap="viridis")
-        axes[1, col].set_title(f"LiDAR {p} | p={c:.2f} " + ("✅" if is_correct else "❌"))
+        axes[1, col].set_title(f"LiDAR {p} | p={c:.2f} ")
         axes[1, col].axis("off")
 
         # colored border for readability

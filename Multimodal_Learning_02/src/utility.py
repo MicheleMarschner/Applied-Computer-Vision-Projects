@@ -8,6 +8,7 @@ import albumentations as A
 from pathlib import Path
 import shutil
 import subprocess
+import wandb
 
 
 def set_seeds(seed=51):
@@ -220,6 +221,43 @@ def prepare_lidar_pointclouds(
         )
 
     return "computed"
+
+
+def init_wandb(model, opt_name, name, fusion_name=None, num_params=-1, batch_size=64, epochs=15):
+  """
+  Initialize a Weights & Biases run for a given fusion model.
+
+  Args:
+      model (nn.Module): The PyTorch model to track.
+      fusion_name (str): Short name of the fusion strategy (e.g. "early_fusion").
+      num_params (int): Total number of trainable parameters of the model.
+      opt_name (str): Name of the optimizer (e.g. "Adam").
+      batch_size (int, optional): Batch size used during training.
+      epochs (int, optional): Number of training epochs.
+
+  Returns:
+      wandb.sdk.wandb_run.Run: The initialized W&B run object.
+  """
+
+  config = {
+    # "embedding_size": embedding_size,      ## TODO: ändert die sich? hab ich die bei fusion?
+    "optimizer_type": opt_name,
+    "model_architecture": model.__class__.__name__,
+    "batch_size": batch_size,
+    "num_epochs": epochs,
+    "num_parameters": num_params
+  }
+  if fusion_name is not None:
+    config["fusion_strategy"] = fusion_name
+
+  run = wandb.init(
+    project="cilp-extended-assessment",
+    name=f"{name}_run",
+    config=config,
+    reinit='finish_previous',                           # allows starting a new run inside one script
+  )
+
+  return run
 
 
 

@@ -9,42 +9,6 @@ from src.visualization import print_loss
 from src.utility import format_time
 
 
-def init_wandb(model, opt_name, fusion_name='unknown', num_params=-1, batch_size=64, epochs=15):
-  """
-  Initialize a Weights & Biases run for a given fusion model.
-
-  Args:
-      model (nn.Module): The PyTorch model to track.
-      fusion_name (str): Short name of the fusion strategy (e.g. "early_fusion").
-      num_params (int): Total number of trainable parameters of the model.
-      opt_name (str): Name of the optimizer (e.g. "Adam").
-      batch_size (int, optional): Batch size used during training.
-      epochs (int, optional): Number of training epochs.
-
-  Returns:
-      wandb.sdk.wandb_run.Run: The initialized W&B run object.
-  """
-
-  config = {
-    # "embedding_size": embedding_size,      ## TODO: ändert die sich? hab ich die bei fusion?
-    "optimizer_type": opt_name,
-    "fusion_strategy": fusion_name,
-    "model_architecture": model.__class__.__name__,
-    "batch_size": batch_size,
-    "num_epochs": epochs,
-    "num_parameters": num_params
-  }
-
-  run = wandb.init(
-    project="cilp-extended-assessment",
-    name=f"{fusion_name}_run",
-    config=config,
-    reinit='finish_previous',                           # allows starting a new run inside one script
-  )
-
-  return run
-
-
 def train_model(model, optimizer, input_fn, loss_fn, epochs, train_dataloader, val_dataloader, model_save_path, target_idx=-1, log_to_wandb=False, device=None):
     """
     Generic training loop for all fusion models.
@@ -212,20 +176,6 @@ def compute_class_weights(dataset, num_classes=2):
     return class_weights
 
 
-def compute_pos_weight_from_dataset(dataset):
-    """
-    Compute pos_weight for BCEWithLogitsLoss from dataset labels.
-    """
-    labels = torch.tensor([sample["label"] for sample in dataset.samples],
-                          dtype=torch.long)
-
-    class_counts = torch.bincount(labels, minlength=2).float()
-    num_neg, num_pos = class_counts[0], class_counts[1]
-
-    pos_weight = num_neg / (num_pos + 1e-6)
-    return pos_weight
-
-
 def get_inputs(batch, device=None):
     """
     Prepare inputs for intermediate/late fusion models.
@@ -307,7 +257,7 @@ def train_with_batch_loss(
         for step, batch in enumerate(train_dataloader):
             optimizer.zero_grad()
             
-            loss = batch_loss_fn(model, batch, device, **(extra_args or {}))
+            loss, _ = batch_loss_fn(model, batch, device, **(extra_args or {}))
             loss.backward()
             optimizer.step()
             train_loss_epoch += loss.item()
@@ -382,12 +332,7 @@ def train_classifier_with_acc(
     Logs per-epoch loss, accuracy, timing, GPU memory, and saves the best model
     based on validation loss.
     """
-
-    # compute positive class weight
-    pos_weight = compute_pos_weight_from_dataset(train_dataloader.dataset)
-    pos_weight = torch.tensor([pos_weight], device=device)
-
-    bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    bce = nn.BCEWithLogitsLoss()
 
     train_losses, val_losses, val_accs, epoch_times = [], [], [], []
     best_val_loss = float("inf")
@@ -440,7 +385,7 @@ def train_classifier_with_acc(
                 correct += (preds.view(-1) == labels.view(-1).long()).sum().item()
                 total += labels.size(0)
 
-        val_loss = val_loss / len(val_dataloader)
+        val_loss_epoch /= len(val_dataloader)
         val_acc = correct / total
         print(f"val_loss={val_loss_epoch:.4f}  val_acc={val_acc*100:.2f}%")
 
