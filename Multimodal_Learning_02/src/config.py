@@ -16,7 +16,7 @@ LABEL_MAP = {"cubes": 0, "spheres": 1}
 
 IMG_SIZE = 64
 BATCH_SIZE = 32
-VALID_BATCHES = 5
+VALID_BATCHES = 10
 N = 12500
 
 # --------------------

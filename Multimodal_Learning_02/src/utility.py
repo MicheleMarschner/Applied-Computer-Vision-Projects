@@ -9,6 +9,10 @@ from pathlib import Path
 import shutil
 import subprocess
 import wandb
+from datetime import datetime
+import json
+
+from datasets import compute_dataset_mean_std
 
 
 def set_seeds(seed=51):
@@ -159,14 +163,6 @@ def create_random_subset(size, dataset):
     return Subset(dataset, indices)
 
 
-
-    """
-    Check whether cached LiDAR point clouds (PCD) are available.
-    """
-    pcd_dir = cache_dir / "cubes" / "pcd"
-    return pcd_dir.exists() and any(pcd_dir.glob("*.pcd"))
-
-
 def has_cached_pointclouds(cache_dir: Path, classes=["cubes", "spheres"]) -> bool:
     """
     Check whether cached LiDAR point clouds (PCD) are available.
@@ -223,7 +219,12 @@ def prepare_lidar_pointclouds(
     return "computed"
 
 
-def init_wandb(model, opt_name, name, fusion_name=None, num_params=-1, batch_size=64, epochs=15):
+def get_timestamp():
+    """Return a human-readable timestamp string (YYYY-MM-DD_HH-MM) for naming files or runs."""
+    return datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+
+def init_wandb(model, opt_name, name, num_params, embedding_size, fusion_name=None, batch_size=64, epochs=15):
   """
   Initialize a Weights & Biases run for a given fusion model.
 
@@ -240,7 +241,7 @@ def init_wandb(model, opt_name, name, fusion_name=None, num_params=-1, batch_siz
   """
 
   config = {
-    # "embedding_size": embedding_size,      ## TODO: ändert die sich? hab ich die bei fusion?
+    "embedding_size": embedding_size,
     "optimizer_type": opt_name,
     "model_architecture": model.__class__.__name__,
     "batch_size": batch_size,
@@ -250,9 +251,11 @@ def init_wandb(model, opt_name, name, fusion_name=None, num_params=-1, batch_siz
   if fusion_name is not None:
     config["fusion_strategy"] = fusion_name
 
+  timestamp = get_timestamp()
+
   run = wandb.init(
     project="cilp-extended-assessment",
-    name=f"{name}_run",
+    name=f"{name}_run_{timestamp}",
     config=config,
     reinit='finish_previous',                           # allows starting a new run inside one script
   )
@@ -260,4 +263,54 @@ def init_wandb(model, opt_name, name, fusion_name=None, num_params=-1, batch_siz
   return run
 
 
+def get_train_stats(dir, img_size, data_dir):
+    """
+    Load training mean and standard deviation from disk if available; otherwise compute them
+    from the training dataset and save the results for reproducibility.
+    """
+    out_dir = dir / "outputs"
+    stats_path = out_dir / "train_stats.json"
 
+    if stats_path.exists():
+        print("Load from file...")
+
+        with open(stats_path, "r") as f:
+            stats = json.load(f)
+
+        mean = stats["mean"]
+        std = stats["std"]
+
+    else:
+        # Calculates mean and standard deviation of the rgb train data
+        # for different dataset (or change in train data) recalculate mean and standard deviation
+        mean, std = compute_dataset_mean_std(root_dir=data_dir, img_size=img_size)
+        print(mean, std)
+        
+        # persist computed stats (mean/std) for reproducibility
+        out_dir.mkdir(exist_ok=True)
+
+        with open(out_dir / "train_stats.json", "w") as f:
+            json.dump({"mean": mean, "std": std}, f, indent=2)
+
+        
+    return mean, std
+
+
+def compute_embedding_size(model_name, feature_dim, spatial=(8, 8)):
+    """
+    Return embedding dimensionality metadata based on model type inferred from the name
+    """
+    name = model_name.lower()
+    base = feature_dim * spatial[0] * spatial[1]
+
+    if "cilp" in name:
+        return {"dim": feature_dim}
+    
+    elif ("projector" in name) or ("classifier" in name):
+        return {"in_dim": feature_dim, "out_dim": base}
+    
+    elif "concat" in name:
+        return {"dim": 2 * base} 
+    
+    else:
+        return {"dim": base}

@@ -142,7 +142,7 @@ class EarlyFusionModel(nn.Module):
         Returns:
             torch.Tensor: Class logits of shape (B, output_dim).
         """
-        features = self.embedder(x)     # → (B, 12800)
+        features = self.embedder(x)     # → (B, 8192)
         preds = self.fullyConnected(features)  # → (B, output_dim)
         return preds  
 
@@ -345,6 +345,12 @@ class LateNet(nn.Module):
     
 
 class CILPBackbone(nn.Module):
+    """
+    Backbone network for CILP-style contrastive learning.
+
+    Encodes an input modality into a fixed-dimensional, L2-normalized embedding
+    using a convolutional feature extractor followed by a projection head.
+    """
     def __init__(self, in_ch, embedder_cls=EmbedderMaxPool, feature_dim=128, emb_size=200):
         super().__init__()
 
@@ -365,6 +371,13 @@ class CILPBackbone(nn.Module):
 
 
 class ContrastivePretraining(nn.Module):
+    """
+    Contrastive pretraining module for cross-modal alignment (CILP-style).
+
+    Encodes RGB images and LiDAR depth maps into a shared embedding space and
+    computes pairwise cosine similarities to produce image-to-LiDAR and
+    LiDAR-to-image logits for contrastive learning.
+    """
     def __init__(self, img_embedder: nn.Module, lidar_embedder: nn.Module):
         super().__init__()
         self.img_embedder = img_embedder
@@ -372,12 +385,12 @@ class ContrastivePretraining(nn.Module):
         self.cos = nn.CosineSimilarity(dim=-1)
 
     def forward(self, rgb_imgs, lidar_depths):
-        # 1. Encode
+        # Encode
         img_emb = self.img_embedder(rgb_imgs)          # (B, D_cilp)
         lidar_emb = self.lidar_embedder(lidar_depths)  # (B, D_cilp)
 
-        # 2. Pairwise cosine similarities, without hardcoding batch_size
-        #    shape: (B, 1, D_cilp) and (1, B, D_cilp) → broadcast → (B, B)
+        # Pairwise cosine similarities, without hardcoding batch_size
+        # shape: (B, 1, D_cilp) and (1, B, D_cilp) → broadcast → (B, B)
         similarity = self.cos(
             img_emb.unsqueeze(1),      # (B, 1, D_cilp)
             lidar_emb.unsqueeze(0),    # (1, B, D_cilp)
@@ -410,6 +423,12 @@ class Projector(nn.Module):
     
 
 class Classifier(nn.Module):
+    """
+    CNN-based binary classifier operating on image tensors or precomputed embeddings.
+
+    Extracts spatial features via convolutional blocks with max pooling, produces a
+    3200-D embedding, and maps it to a single logit for cube vs. sphere classification.
+    """
     def __init__(self, in_ch):
         super().__init__()
         kernel_size = 3
@@ -447,6 +466,13 @@ class Classifier(nn.Module):
 
 
 class RGB2LiDARClassifier(nn.Module):
+    """
+    End-to-end RGB-to-LiDAR classifier.
+
+    Uses a frozen CILP image encoder to extract RGB embeddings, projects them
+    into the LiDAR embedding space, and performs classification using a frozen
+    LiDAR-based CNN classifier.
+    """
     def __init__(self, CILP, projector, lidar_cnn):
         super().__init__()
         self.img_embedder = CILP.img_embedder         # frozen

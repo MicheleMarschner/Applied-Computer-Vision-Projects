@@ -137,6 +137,13 @@ class AssessmentDataset(Dataset):
 
 
 class AssessmentCILPDataset(Dataset):
+    """
+    Dataset for the final assessment consisting of paired RGB images and LiDAR
+    depth maps for binary classification (cube vs. sphere).
+
+    Loads RGB (.png) and corresponding LiDAR (.npy) files, applies optional
+    RGB transforms, and returns (rgb_tensor, lidar_tensor, class_label).
+    """
     def __init__(self, root_dir, transform_rgb=None):
         self.root_dir = Path(root_dir)
         self.rgb = []

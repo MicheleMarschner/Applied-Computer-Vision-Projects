@@ -216,6 +216,9 @@ def get_early_inputs(batch, device=None):
 
 
 def get_rgb_inputs(batch, device):
+    """
+    Extracts and moves RGB inputs from a multimodal batch to the target device.
+    """
     rgb, lidar_xyza, pos = batch
     return (rgb.to(device),)
 
@@ -315,6 +318,7 @@ def train_with_batch_loss(
         "max_gpu_mem_mb": float(max_gpu_mem_mb),
         "num_params": sum(p.numel() for p in model.parameters() if p.requires_grad),
     }
+
 
 def train_classifier_with_acc(
     model,
@@ -431,3 +435,11 @@ def train_classifier_with_acc(
         "best_val_acc": float(best_val_acc),
         "max_gpu_mem_mb": float(max_gpu_mem_mb),
     }
+
+
+def load_model(model, model_path, device=None):
+
+    state_dict = torch.load(model_path, weights_only=True, map_location=device)
+    model.load_state_dict(state_dict, strict=True)
+
+    return model

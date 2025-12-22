@@ -31,19 +31,28 @@ def print_loss(epoch, loss, outputs, target, is_train=True, is_debug=False):
 
 
 def plot_val_losses(loss_dict, title="Validation Loss per Model", figsize=(8,5)):
+    """
+    Plots validation loss curves for multiple models for comparison.
+    """
     fig, ax = plt.subplots(figsize=figsize)
+    
     for model_name, losses in loss_dict.items():
         ax.plot(losses, label=model_name)
+
     ax.set_title(title)
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Validation Loss")
     ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
+
     return fig, ax
 
 
 def plot_losses(losses, title="Training & Validation Loss", figsize=(10, 6)):
+    """
+    Plots training and validation loss curves for one or more models.
+    """
     fig, ax = plt.subplots(figsize=figsize)
 
     for model_name, log in losses.items():
@@ -56,15 +65,22 @@ def plot_losses(losses, title="Training & Validation Loss", figsize=(10, 6)):
     ax.grid(True, alpha=0.3)
     ax.legend()
     fig.tight_layout()
+
     return fig, ax
 
 
 def build_fusion_comparison_df(metrics, name_map=None):
+    """
+    Builds a summary DataFrame comparing fusion strategies by performance,
+    efficiency, and resource usage.
+    """
     rows = []
+
     for key, m in metrics.items():
         avg_train_loss = float(np.mean(m["train_losses"]))
         avg_valid_loss = float(np.mean(m["valid_losses"]))
         avg_epoch_time = float(np.mean(m["epoch_times"]))
+        
         rows.append({
             "Fusion Strategy": name_map.get(key, key) if name_map else key,
             "Avg Valid Loss": avg_valid_loss,
@@ -73,6 +89,7 @@ def build_fusion_comparison_df(metrics, name_map=None):
             "Avg time per epoch (min:s)": avg_epoch_time,
             "GPU Memory (MB, max)": float(m["max_gpu_mem_mb"]),
         })
+
     return pd.DataFrame(rows)
 
 
@@ -311,7 +328,7 @@ def plot_retrieval_examples(
     dataloader,
     device,
     k=5,
-    mode="correct",  # "correct" | "mismatches" | "random"
+    mode="mismatches",  # "correct" | "mismatches" | "random"
     normalize="softmax",             # None | "softmax"
     temperature=1.0,
     title="RGB → LiDAR retrieval examples",
@@ -365,14 +382,6 @@ def plot_retrieval_examples(
     # ---- build wandb.Table lazily (so function can be used without wandb init) ----
     table = wandb.Table(columns=["RGB", "Retrieved LiDAR", "i", "pred", "gt", "correct", "conf"])
 
-    for i in idx_show[:k_eff]:
-        i = int(i)
-        table.add_data(
-            wandb.Image(rgb_img),
-            wandb.Image(lidar_img, caption=f"p={c:.2f}"),
-            i, int(preds[i]), int(gt[i]), bool(is_correct), float(conf[i].item()),
-        )
-
     # ---- plot 2 x k grid ----
     fig, axes = plt.subplots(2, k_eff, figsize=(2.8 * k_eff, 5.2))
     if k_eff == 1:
@@ -393,8 +402,8 @@ def plot_retrieval_examples(
         elif x.shape[0] == 1:
             x = x.repeat(3, 1, 1)
 
-        mean = torch.tensor([0.485, 0.456, 0.406], device=x.device)[:, None, None]
-        std  = torch.tensor([0.229, 0.224, 0.225], device=x.device)[:, None, None]
+        mean = torch.tensor([0.005240166559815407, 0.005222771782428026, 0.005286598112434149, 1.0], device=x.device)[:, None, None]
+        std  = torch.tensor([0.05877992883324623, 0.05873067304491997, 0.059298109263181686, 0.00000024509], device=x.device)[:, None, None]
 
         rgb_img = (x * std + mean).clamp(0, 1).permute(1, 2, 0).cpu().numpy()
         axes[0, col].imshow(rgb_img)
@@ -415,5 +424,13 @@ def plot_retrieval_examples(
 
     fig.suptitle(f"{title} (mode={mode})", y=1.02)
     fig.tight_layout()
+
+    for i in idx_show[:k_eff]:
+        i = int(i)
+        table.add_data(
+            wandb.Image(rgb_img),
+            wandb.Image(lidar_img, caption=f"p={c:.2f}"),
+            i, int(preds[i]), int(gt[i]), bool(is_correct), float(conf[i].item()),
+        )
 
     return fig, table
