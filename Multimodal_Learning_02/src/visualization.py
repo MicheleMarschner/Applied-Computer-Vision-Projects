@@ -323,114 +323,64 @@ def plot_similarity_matrix(
     return fig
 
 
-def plot_retrieval_examples(
+def plot_sample_predictions_rgb_lidar(
     model,
     dataloader,
     device,
     k=5,
-    mode="mismatches",  # "correct" | "mismatches" | "random"
-    normalize="softmax",             # None | "softmax"
-    temperature=1.0,
-    title="RGB → LiDAR retrieval examples",
+    class_names=("cube", "sphere"),
 ):
     """
-    Creates a 2xk grid: top row = RGB queries, bottom row = retrieved LiDAR.
-    Returns:
-        fig (matplotlib.figure.Figure)
-        table (wandb.Table)  [created lazily; requires wandb at runtime when used]
+    Shows k sample predictions with:
+    top row: RGB input
+    bottom row: corresponding LiDAR
     """
     model.eval()
-    rgb, lidar, *_ = next(iter(dataloader))
-    rgb, lidar = rgb.to(device), lidar.to(device)
+
+    rgb, lidar, labels = next(iter(dataloader))
+    rgb = rgb.to(device)
+    lidar = lidar.to(device)
+    labels = labels.to(device)
 
     with torch.no_grad():
-        logits_per_img, _ = model(rgb, lidar)  # (B,B)
+        logits = model(rgb)
+        preds = logits.argmax(dim=1)
 
-    B = logits_per_img.size(0)
-    gt = torch.arange(B, device=device)
+    B = rgb.size(0)
+    k = min(k, B)
 
-    # probabilities + preds + confidence
-    if normalize == "softmax":
-        probs = Func.softmax(logits_per_img / temperature, dim=1)
-        preds = probs.argmax(dim=1)
-        conf = probs.max(dim=1).values
-    else:
-        preds = logits_per_img.argmax(dim=1)
-        conf = torch.softmax(logits_per_img / temperature, dim=1).max(dim=1).values  # for display only
-
-    correct_mask = preds.eq(gt)
-
-    # ---- choose which indices to show ----
-    all_idx = torch.arange(B, device=device)
-    if mode == "random":
-        idx_show = all_idx[torch.randperm(B, device=device)[:min(k, B)]]
-    elif mode == "mismatches":
-        wrong = all_idx[~correct_mask]
-        idx_show = wrong[:min(k, len(wrong))] if len(wrong) > 0 else all_idx[torch.argsort(conf)[:min(k, B)]]
-    elif mode == "correct":
-        corr = all_idx[correct_mask]
-        if len(corr) == 0:
-            idx_show = all_idx[torch.argsort(conf)[:min(k, B)]]
-        else:
-            corr_sorted = corr[torch.argsort(conf[corr], descending=True)]
-            idx_show = corr_sorted[:min(k, len(corr_sorted))]
-    else:
-        raise ValueError(f"Unknown mode: {mode}")
-
-    k_eff = int(min(k, len(idx_show)))
-
-    # ---- build wandb.Table lazily (so function can be used without wandb init) ----
-    table = wandb.Table(columns=["RGB", "Retrieved LiDAR", "i", "pred", "gt", "correct", "conf"])
-
-    # ---- plot 2 x k grid ----
-    fig, axes = plt.subplots(2, k_eff, figsize=(2.8 * k_eff, 5.2))
-    if k_eff == 1:
+    fig, axes = plt.subplots(2, k, figsize=(3.2 * k, 6))
+    if k == 1:
         axes = np.array([[axes[0]], [axes[1]]])
 
-    for col, i in enumerate(idx_show[:k_eff]):
-        i = int(i)
-        p = int(preds[i])
-        is_correct = bool(correct_mask[i])
-        c = float(conf[i].item())
-
-        # RGB query
-        x = rgb[i].detach()
-
-        # make it 3-channel for display
+    for i in range(k):
+        # ---------- RGB ----------
+        x = rgb[i].detach().cpu()
         if x.shape[0] == 4:
-            x = x[:3]                 # drop alpha / extra channel
+            x = x[:3]
         elif x.shape[0] == 1:
             x = x.repeat(3, 1, 1)
 
-        mean = torch.tensor([0.005240166559815407, 0.005222771782428026, 0.005286598112434149, 1.0], device=x.device)[:, None, None]
-        std  = torch.tensor([0.05877992883324623, 0.05873067304491997, 0.059298109263181686, 0.00000024509], device=x.device)[:, None, None]
+        rgb_img = x.clamp(0, 1).permute(1, 2, 0).numpy()
 
-        rgb_img = (x * std + mean).clamp(0, 1).permute(1, 2, 0).cpu().numpy()
-        axes[0, col].imshow(rgb_img)
-        axes[0, col].set_title(f"RGB {i}")
-        axes[0, col].axis("off")
+        pred = int(preds[i])
+        gt = int(labels[i])
+        correct = pred == gt
 
-        # Retrieved LiDAR (depth map)
-        lidar_img = lidar[p].squeeze().detach().cpu().numpy()
-        axes[1, col].imshow(lidar_img, cmap="viridis")
-        axes[1, col].set_title(f"LiDAR {p} | p={c:.2f} ")
-        axes[1, col].axis("off")
-
-        # colored border for readability
-        for sp in axes[1, col].spines.values():
-            sp.set_visible(True)
-            sp.set_linewidth(3)
-            sp.set_edgecolor("green" if is_correct else "red")
-
-    fig.suptitle(f"{title} (mode={mode})", y=1.02)
-    fig.tight_layout()
-
-    for i in idx_show[:k_eff]:
-        i = int(i)
-        table.add_data(
-            wandb.Image(rgb_img),
-            wandb.Image(lidar_img, caption=f"p={c:.2f}"),
-            i, int(preds[i]), int(gt[i]), bool(is_correct), float(conf[i].item()),
+        axes[0, i].imshow(rgb_img)
+        axes[0, i].axis("off")
+        axes[0, i].set_title(
+            f"Pred: {class_names[pred]}\nGT: {class_names[gt]}",
+            color="green" if correct else "red",
+            fontsize=10,
         )
 
-    return fig, table
+        # ---------- LiDAR ----------
+        lidar_img = lidar[i].squeeze().detach().cpu().numpy()
+        axes[1, i].imshow(lidar_img, cmap="viridis")
+        axes[1, i].axis("off")
+
+    fig.suptitle("Sample Predictions (RGB input with corresponding LiDAR)", fontsize=14)
+    fig.tight_layout()
+
+    return fig

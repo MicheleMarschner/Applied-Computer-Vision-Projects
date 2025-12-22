@@ -1,0 +1,70 @@
+[Classifier] Epoch 1/20
+train_loss=0.2674
+val_loss=0.1668  val_acc=93.44%
+  → New best saved (val loss 0.1668)
+[Classifier] Epoch 2/20
+train_loss=0.2400
+val_loss=0.2122  val_acc=90.62%
+[Classifier] Epoch 3/20
+train_loss=0.2332
+val_loss=0.1766  val_acc=93.75%
+[Classifier] Epoch 4/20
+train_loss=0.2136
+val_loss=0.1653  val_acc=95.31%
+  → New best saved (val loss 0.1653)
+[Classifier] Epoch 5/20
+train_loss=0.1941
+val_loss=0.1249  val_acc=95.31%
+  → New best saved (val loss 0.1249)
+[Classifier] Epoch 6/20
+train_loss=0.2054
+val_loss=0.1746  val_acc=93.44%
+[Classifier] Epoch 7/20
+train_loss=0.1903
+val_loss=0.2265  val_acc=92.50%
+[Classifier] Epoch 8/20
+train_loss=0.1894
+val_loss=0.1760  val_acc=94.06%
+[Classifier] Epoch 9/20
+train_loss=0.1921
+val_loss=0.1478  val_acc=95.94%
+[Classifier] Epoch 10/20
+train_loss=0.1826
+val_loss=0.2085  val_acc=93.12%
+[Classifier] Epoch 11/20
+train_loss=0.1725
+val_loss=0.1788  val_acc=94.69%
+[Classifier] Epoch 12/20
+train_loss=0.1599
+val_loss=0.1423  val_acc=94.38%
+[Classifier] Epoch 13/20
+train_loss=0.1650
+val_loss=0.1427  val_acc=94.38%
+[Classifier] Epoch 14/20
+train_loss=0.1624
+val_loss=0.1650  val_acc=94.06%
+[Classifier] Epoch 15/20
+train_loss=0.1561
+val_loss=0.1791  val_acc=92.81%
+[Classifier] Epoch 16/20
+train_loss=0.1554
+val_loss=0.1477  val_acc=95.00%
+[Classifier] Epoch 17/20
+train_loss=0.1423
+val_loss=0.1311  val_acc=95.31%
+[Classifier] Epoch 18/20
+train_loss=0.1472
+val_loss=0.1138  val_acc=96.25%
+  → New best saved (val loss 0.1138)
+[Classifier] Epoch 19/20
+train_loss=0.1478
+val_loss=0.1284  val_acc=95.62%
+[Classifier] Epoch 20/20
+train_loss=0.1472
+val_loss=0.1339  val_acc=95.31%
+
+============================================================
+BEST VALIDATION RESULTS
+Loss     : 0.1138
+Accuracy : 96.25%
+============================================================

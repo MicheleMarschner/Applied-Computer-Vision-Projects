@@ -1,13 +1,27 @@
 # Multimodal Learning with RGB–LiDAR Fusion - Project 02
 This project extends the NVIDIA DLI Multimodality Workshop by implementing and analyzing a complete multimodal learning pipeline for RGB–LiDAR data. It covers dataset exploration, fusion architecture design, ablation studies, contrastive pretraining, and final classifier evaluation.
 
+The goal of this project is to systematically study how different RGB–LiDAR fusion strategies affect
+classification performance on a controlled multimodal dataset (cubes vs. spheres).
+
 ---
 
-## 1. Setup Instructions (Colab or Local)
+## 1. Method Overview
+
+The project follows a structured multimodal learning pipeline:
+
+1. Dataset exploration and sanity checks (RGB, LiDAR, class balance)
+2. Independent modality encoders for RGB and LiDAR
+3. Fusion at different stages (early / intermediate / late)
+4. Optional contrastive pretraining of modality encoders
+5. Supervised classifier training
+6. Quantitative evaluation and qualitative analysis
+
+## 2. Setup Instructions (Colab or Local)
 
 ## Setup
 
-You can run this project either in **Google Colab** (recommended) or **locally**.
+It is recommended to run this project in **Google Colab**, as this ensures a consistent environment and reproducible evaluation.
 
 ### 1. Requirements
 
@@ -55,9 +69,7 @@ You can run this project either in **Google Colab** (recommended) or **locally**
 
 3. Install dependencies
 
-   ```python
-   !pip install -r requirements.txt
-   ```
+   All necessary dependecies will be downloaded once you run the notebooks. 
 
 4. Prepare the dataset                                                                             
    
@@ -68,6 +80,8 @@ You can run this project either in **Google Colab** (recommended) or **locally**
 
    Access the dataset and create a shortcut directly inside your repository folder: Multimodal_Learning_02/data
    `Right-click` → `Organize` → `Create shortcut`
+
+   Creating a shortcut avoids duplicating the dataset while allowing the notebooks to access it via a fixed relative path.
 
    The dataset should have the following structure:
    data/assessment/
@@ -107,9 +121,6 @@ cd Applied-Computer-Vision-Projects/Multimodal_Learning_02
 # Create environment with conda (or another environment of your choice)
 conda create -n [PROJECT] python=3.10
 conda activate [PROJECT]
-
-# Install dependencies
-pip install -r requirements.txt
 ```
 
 The repo should have the following structure:
@@ -181,57 +192,17 @@ jupyter lab
 
 ---
 
-## 2. Weights & Biases Project Link
+## 3. Weights & Biases Project Link
 You can view all experiment runs, metrics, and logged artifacts in the public W&B project:
 
 - **Project name:** `cilp-extended-assessment`
 - **W&B username:** `michele-marschner-university-of-potsdam`
-- 🔗 **https://wandb.ai/michele-marschner-university-of-potsdam/cilp-extended-assessment**
-
----
-
-## 3. Summary of Results
-
-|index|Fusion Strategy|Avg Valid Loss|Best Valid Loss|Num of params|Avg time per epoch \(min:s\)|GPU Memory \(MB, max\)|
-|---|---|---|---|---|---|---|
-|0|Early Fusion|0\.0047|1\.2874e-06|8387990|10\.0998|497\.7852|
-|1|Intermediate \(Concat\)|0\.0057|5\.0663e-07|16672374|15\.8507|672\.7407|
-|2|Intermediate \(Multiplicative\)|0\.0069|1\.3186e-06|8480374|13\.6595|643\.0933|
-|3|Intermediate \(Hadamard\)|0\.0023|1\.4230e-06|8480374|13\.2025|675\.4458|
-|4|Intermediate \(Add\)|0\.0029|1\.0505e-07|8480374|13\.1532|707\.7983|
-|5|Late Fusion|0\.0070|1\.5497e-07|16672374|15\.6503|833\.4009|
-
-
-
-**Early Fusion:**
-|index|Metric|MaxPool2d|Strided Conv|Difference \(Strided - MaxPool\)|
-|---|---|---|---|---|
-|0|Validation Loss \(best\)|5\.9752e-07|7\.1077e-07|1\.1325e-07|
-|1|Parameters|8387990\.0|8387990\.0|0\.0|
-|2|Training Time \(s\)|136\.3252|129\.5581|-6\.7671|
-|3|Final Accuracy|1\.0|1\.0|0\.0|
-
-**Intermediate Fusion (Concat):**
-|index|Metric|MaxPool2d|Strided Conv|Difference \(Strided - MaxPool\)|
-|---|---|---|---|---|
-|0|Validation Loss \(best\)|1\.3411e-08|4\.7867e-06|4\.7733e-06|
-|1|Parameters|16672374\.0|16672374\.0|0\.0|
-|2|Training Time \(s\)|218\.2184|168\.5268|-49\.6916|
-|3|Final Accuracy|1\.0|1\.0|0\.0|
-
-**Late Fusion:**
-|index|Metric|MaxPool2d|Strided Conv|Difference \(Strided - MaxPool\)|
-|---|---|---|---|---|
-|0|Validation Loss \(best\)|1\.2889e-07|5\.1322e-06|5\.0033e-06|
-|1|Parameters|16672374\.0|16672374\.0|0\.0|
-|2|Training Time \(s\)|217\.3971|169\.4651|-47\.9319|
-|3|Final Accuracy|1\.0|1\.0|0\.0|
+- 🔗 [Project Link](https://wandb.ai/michele-marschner-university-of-potsdam/cilp-extended-assessment)
 
 ---
 
 ## 4. Instructions to Reproduce Results
-To reproduce all results shown in this project, first complete the steps in
-👉 Setup Instructions (which include installing dependencies, preparing the dataset, and setting the W&B API key).
+To reproduce all results shown in this project, first complete the steps in the Setup Instructions (which include installing dependencies, preparing the dataset, and setting the W&B API key).
 Once the environment is ready, proceed as follows:
 
 1. Run the notebooks in order
@@ -244,18 +215,37 @@ notebooks/04_final_assessment.ipynb
 Each notebook automatically:
 - loads the dataset
 - sets random seeds for reproducibility
-- trains the corresponding model (unless you choose to load checkpoints)
+- trains the corresponding model (unless you have pretrained models in the checkpoints folder) 
 - logs metrics to Weights & Biases
 - saves results to the checkpoints/ folder
 
 2. Loading pretrained checkpoints (optional)
-If you want to reproduce results quickly without retraining, you may load the saved models from checkpoints/.
+If you want to reproduce results quickly without retraining, you may load the saved models from this Drive Folder: [Drive Folder Link](https://drive.google.com/drive/folders/1c60n458cce9aY4K__lm68uMntOoPdCHH?usp=sharing)
 
-Add this in your Colab cell before training:
-```python
-model = YourModelClass(...)
-model.load_state_dict(torch.load("checkpoints/model_name.pth"))
-model.to(device)
-model.eval()
-```
 This allows you to skip training and directly run evaluation or visualization cells.
+
+3. Normalization statistics (mean and standard deviation) are computed using 2,000 samples from the training split. These statistics are then applied to all training, validation, and test samples to avoid data leakage. For the experiments all training data and validation data has been used. There is a separate test set which could be used for further hyperparameter search. 
+
+## 5. Limitations
+- The dataset is small and synthetically generated, limiting real-world generalization
+- Only simple CNN-based encoders are explored
+- LiDAR is represented as dense projections rather than raw point clouds
+
+## 6. Results
+All notebooks contain the results (tables, observations and interpretation) in the Evaluation section of the respective notebook. 
+
+Final results:
+| Component | Metric | Requirement | Achieved |
+|----------|--------|-------------|----------|
+| CILP | Val loss | < 3.2 | 2.5598  | 
+| Projector | Val MSE | < 2.5 | 1.2246 | 
+| RGB→LiDAR | Val accuracy | > 95% | 96.25% |
+
+## 7. Acknowledgements
+All code in this repository was written by the author unless explicitly stated otherwise.
+
+External resources were used for reference and conceptual guidance, including:
+- NVIDIA DLI Multimodality Workshop materials (dataset structure and baseline ideas)
+- PyTorch, FiftyOne and Weights & Biases official documentation
+
+Coding assistance was provided by ChatGPT (OpenAI) for debugging support, code refactoring suggestions, and clarification of PyTorch and training concepts. All generated suggestions were reviewed, adapted, and integrated manually.

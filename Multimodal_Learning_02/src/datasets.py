@@ -6,6 +6,7 @@ import torch
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, Subset
 import numpy as np
+import json
 
 from src.utility import create_random_subset, create_deterministic_training_dataloader, get_torch_xyza
 
@@ -447,3 +448,35 @@ def get_cilp_dataloaders(
 
     return train_ds, train_loader, val_ds, val_loader, test_ds, test_loader
 
+
+def get_train_stats(dir, img_size, data_dir):
+    """
+    Load training mean and standard deviation from disk if available; otherwise compute them
+    from the training dataset and save the results for reproducibility.
+    """
+    out_dir = dir / "outputs"
+    stats_path = out_dir / "train_stats.json"
+
+    if stats_path.exists():
+        print("Load from file...")
+
+        with open(stats_path, "r") as f:
+            stats = json.load(f)
+
+        mean = stats["mean"]
+        std = stats["std"]
+
+    else:
+        # Calculates mean and standard deviation of the rgb train data
+        # for different dataset (or change in train data) recalculate mean and standard deviation
+        mean, std = compute_dataset_mean_std(root_dir=data_dir, img_size=img_size)
+        print(mean, std)
+        
+        # persist computed stats (mean/std) for reproducibility
+        out_dir.mkdir(exist_ok=True)
+
+        with open(out_dir / "train_stats.json", "w") as f:
+            json.dump({"mean": mean, "std": std}, f, indent=2)
+
+        
+    return mean, std
