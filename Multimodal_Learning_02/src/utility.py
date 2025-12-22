@@ -5,6 +5,11 @@ from torch.utils.data import Subset
 import numpy as np
 import cv2
 import albumentations as A
+from pathlib import Path
+import shutil
+import subprocess
+import wandb
+from datetime import datetime
 
 
 def set_seeds(seed=51):
@@ -155,4 +160,121 @@ def create_random_subset(size, dataset):
     return Subset(dataset, indices)
 
 
+def has_cached_pointclouds(cache_dir: Path, classes=["cubes", "spheres"]) -> bool:
+    """
+    Check whether cached LiDAR point clouds (PCD) are available.
+    """
+    # Check cache for all requested classes
+    for cls in classes:
+        pcd_dir = cache_dir / cls / "pcd"
+        if not (pcd_dir.exists() and any(pcd_dir.glob("*.pcd"))):
+            return False
+    return True
 
+
+def prepare_lidar_pointclouds(
+    raw_dataset_dir: Path,
+    local_pointcloud_dir: Path,
+    cache_dir: Path,
+    converter_script: Path,
+    classes=["cubes", "spheres"],
+):
+    """
+    Prepare LiDAR point clouds for local use.
+
+    If cached point clouds exist, they are copied from the cache directory.
+    Otherwise, point clouds are generated from raw depth data and can later
+    be persisted as cache.
+
+    Returns:
+        str: "cache" if loaded from cache, "computed" if newly generated.
+    """
+    if has_cached_pointclouds(cache_dir, classes):
+        print("Loading cached LiDAR point clouds")
+        shutil.copytree(cache_dir, local_pointcloud_dir, dirs_exist_ok=True)
+        return "cache"
+
+    print("Computing LiDAR point clouds from raw data")
+    local_pointcloud_dir.mkdir(parents=True, exist_ok=True)
+
+    for cls in classes:
+        input_dir = raw_dataset_dir / cls
+        output_dir = local_pointcloud_dir / cls / "pcd"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        subprocess.run(
+            [
+                "python",
+                str(converter_script),
+                str(input_dir),
+                "--output-dir",
+                str(output_dir),
+            ],
+            check=True,
+        )
+
+    return "computed"
+
+
+def get_timestamp():
+    """Return a human-readable timestamp string (YYYY-MM-DD_HH-MM) for naming files or runs."""
+    return datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+
+def init_wandb(model, opt_name, name, num_params, embedding_size, fusion_name=None, batch_size=64, epochs=15):
+  """
+  Initialize a Weights & Biases run for a given fusion model.
+
+  Args:
+      model (nn.Module): The PyTorch model to track.
+      fusion_name (str): Short name of the fusion strategy (e.g. "early_fusion").
+      num_params (int): Total number of trainable parameters of the model.
+      opt_name (str): Name of the optimizer (e.g. "Adam").
+      batch_size (int, optional): Batch size used during training.
+      epochs (int, optional): Number of training epochs.
+
+  Returns:
+      wandb.sdk.wandb_run.Run: The initialized W&B run object.
+  """
+
+  config = {
+    "embedding_size": embedding_size,
+    "optimizer_type": opt_name,
+    "model_architecture": model.__class__.__name__,
+    "batch_size": batch_size,
+    "num_epochs": epochs,
+    "num_parameters": num_params
+  }
+  if fusion_name is not None:
+    config["fusion_strategy"] = fusion_name
+
+  timestamp = get_timestamp()
+
+  run = wandb.init(
+    project="cilp-extended-assessment",
+    name=f"{name}_run_{timestamp}",
+    config=config,
+    reinit='finish_previous',                           # allows starting a new run inside one script
+  )
+
+  return run
+
+
+def compute_embedding_size(model_name, feature_dim, spatial=(8, 8)):
+    """
+    Return embedding dimensionality metadata based on model type inferred from the name
+    """
+    name = model_name.lower()
+    base = feature_dim * spatial[0] * spatial[1]
+
+    if "cilp" in name:
+        return {"dim": feature_dim}
+    
+    elif ("projector" in name) or ("classifier" in name):
+        return {"in_dim": feature_dim, "out_dim": base}
+    
+    elif "concat" in name:
+        return {"dim": 2 * base} 
+    
+    else:
+        return {"dim": base}

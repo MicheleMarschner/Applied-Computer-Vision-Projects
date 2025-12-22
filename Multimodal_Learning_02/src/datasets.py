@@ -1,14 +1,12 @@
 from pathlib import Path
-
 from PIL import Image
 from tqdm import tqdm
 import random
-
 import torch
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, Subset
-
 import numpy as np
+import json
 
 from src.utility import create_random_subset, create_deterministic_training_dataloader, get_torch_xyza
 
@@ -37,8 +35,6 @@ class AssessmentDataset(Dataset):
         seed=51
     ):
         self.root_dir = Path(root_dir)
-
-        # These MUST be deterministic transforms (Resize, ToTensor, Normalize...)
         self.transform_rgb = transform_rgb
         self.transform_lidar = transform_lidar
 
@@ -46,17 +42,16 @@ class AssessmentDataset(Dataset):
         self.label_map = {"cubes": 0, "spheres": 1}
 
         samples = []
+
         self.az = {}
         self.ze = {}
 
         print(f"Scanning RAW dataset in {root_dir}...")
 
-        # -------- 1. Scan the dataset & load azimuth/zenith --------
+        # Scan the dataset & load azimuth/zenith
         for cls in self.classes:
             cls_dir   = self.root_dir / cls
-            rgb_dir   = cls_dir / "rgb"
-            lidar_dir = cls_dir / "lidar"
-
+            
             # load az/zen
             az_path = cls_dir / "azimuth.npy"
             ze_path = cls_dir / "zenith.npy"
@@ -66,27 +61,28 @@ class AssessmentDataset(Dataset):
             self.az[cls] = torch.from_numpy(np.load(az_path)).float()
             self.ze[cls] = torch.from_numpy(np.load(ze_path)).float()
 
-            # match stems
-            rgb_files   = sorted(rgb_dir.glob("*.png"))
-            lidar_files = sorted(lidar_dir.glob("*.npy"))
+            # find matching rgb and lidar files
+            pairs_by_class = find_matching_files(
+                classes=self.classes,
+                rgb_root=self.root_dir,
+                lidar_root=self.root_dir,
+                rgb_subdir="rgb",
+                lidar_subdir="lidar",
+                rgb_ext="png",
+                lidar_ext="npy",
+            )
 
-            rgb_stems   = {f.stem for f in rgb_files}
-            lidar_stems = {f.stem for f in lidar_files}
-            matching    = sorted(rgb_stems & lidar_stems)
+            for cls in self.classes:
+                cls_pairs = pairs_by_class[cls]
+                for p in cls_pairs:
+                    samples.append({
+                            "class": cls,
+                            "rgb_path": p["rgb"],
+                            "depth_path": p["lidar"],
+                            "label": self.label_map[cls],
+                        })
 
-            print(f"{cls}: {len(matching)} paired samples")
-
-            for stem in matching:
-                samples.append(
-                    {
-                        "class": cls,
-                        "rgb_path": rgb_dir / f"{stem}.png",
-                        "depth_path": lidar_dir / f"{stem}.npy",
-                        "label": self.label_map[cls],
-                    }
-                )
-
-        # -------- Optional shuffle --------
+        # Optional shuffle
         if shuffle:
             rng = random.Random(seed)
             rng.shuffle(samples)
@@ -100,7 +96,7 @@ class AssessmentDataset(Dataset):
         self.lidar_tensors = []
         self.labels = []
 
-        # -------- 2. PRECOMPUTE EVERYTHING --------
+        # Precompute everything
         print("Precomputing RGB + XYZA tensors into RAM...")
 
         for item in tqdm(self.samples, desc="Preprocessing"):
@@ -108,14 +104,14 @@ class AssessmentDataset(Dataset):
             az  = self.az[cls]
             ze  = self.ze[cls]
 
-            # --- RGB ---
+            # RGB
             rgb_img = Image.open(item["rgb_path"])
             if self.transform_rgb:
                 rgb_tensor = self.transform_rgb(rgb_img)  # applied once
             else:
                 rgb_tensor = transforms.ToTensor()(rgb_img)
 
-            # --- LiDAR XYZA ---
+            # LiDAR XYZA
             depth_np = np.load(item["depth_path"])
             depth_t  = torch.from_numpy(depth_np).float()
             xyza = get_torch_xyza(depth_t, az, ze)        # (4,H,W)
@@ -129,7 +125,7 @@ class AssessmentDataset(Dataset):
 
         print(f"Dataset ready: {len(self.samples)} samples preprocessed.")
 
-    # -------- Fast loaders --------
+    # Fast loaders
     def __len__(self):
         return len(self.samples)
 
@@ -141,110 +137,14 @@ class AssessmentDataset(Dataset):
         )
 
 
-## Final: überdenken woher datenset kommen soll
-class AssessmentXYZADataset(Dataset):
-    """
-    Dataset for the CILP XYZ + RGB assessment data.
-
-    It expects the following folder structure:
-
-        root/
-          cubes/
-            rgb/*.png
-            lidar_xyza/*.npy
-          spheres/
-            rgb/*.png
-            lidar_xyza/*.npy
-
-    Each sample consists of an RGB image, a LiDAR XYZA tensor and a class label.
-    """
-    def __init__(self, root_dir, start_idx=0, end_idx=None,
-                 transform_rgb=None, transform_lidar=None, shuffle=True, seed=51):
-        """
-        Args:
-            root_dir (str or Path): Root directory of the dataset.
-            start_idx (int): Start index (inclusive) for slicing the dataset.
-            end_idx (int or None): End index (exclusive); if None use all.
-            transform_rgb (callable or None): Transform applied to RGB images.
-            transform_lidar (callable or None): Transform applied to LiDAR tensors.
-            shuffle (bool): If True, shuffle the full list of samples once.
-        """
-        self.root_dir = Path(root_dir)
-        self.transform_rgb = transform_rgb
-        self.transform_lidar = transform_lidar
-
-        self.classes = ["cubes", "spheres"]
-        self.label_map = {"cubes": 0, "spheres": 1}
-
-        samples = []
-
-        print(f"Scanning dataset in {root_dir}...")
-        for cls in self.classes:
-            cls_dir = self.root_dir / cls
-            rgb_dir = cls_dir / "rgb"
-            lidar_dir = cls_dir / "lidar_xyza"
-
-            rgb_files = sorted(rgb_dir.glob("*.png"))
-            print(f"{cls}: {len(rgb_files)} RGB files found. Matching XYZA...")
-
-            for rgb_path in tqdm(rgb_files, desc=f"{cls} matching", leave=False):
-                stem = rgb_path.stem
-                lidar_path = lidar_dir / f"{stem}.npy"
-                if lidar_path.exists():
-                    samples.append({
-                        "rgb": rgb_path,
-                        "lidar_xyza": lidar_path,
-                        "label": self.label_map[cls],
-                    })
-
-        if shuffle:
-            rng = random.Random(seed)
-            rng.shuffle(samples)
-
-        if end_idx is None:
-            end_idx = len(samples)
-        self.samples = samples[start_idx:end_idx]
-
-        # Preload LiDAR tensors into memory since they are small and fast to cache
-        print(f"Preloading LiDAR XYZA tensors into RAM...")
-        self.lidar_tensors = []
-        for item in tqdm(self.samples, desc="Loading XYZA", leave=False):
-            lidar_np = np.load(item["lidar_xyza"])        # (4, H, W)
-            lidar_t  = torch.from_numpy(lidar_np).float() # CPU tensor
-            self.lidar_tensors.append(lidar_t)
-
-        print(
-            f"Dataset ready: {len(self.samples)} samples loaded.\n"
-            f"Slice [{start_idx}:{end_idx}]"
-        )
-
-    def __len__(self):
-        """Return the number of samples in this dataset slice."""
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        """
-        Load a single (rgb, lidar, label) triplet.
-
-        Returns:
-            tuple: (rgb_tensor, lidar_tensor, label_tensor)
-        """
-        item  = self.samples[idx]
-        lidar = self.lidar_tensors[idx]
-
-        # RGB image is loaded on the fly
-        rgb = Image.open(item["rgb"])
-        if self.transform_rgb:
-            rgb = self.transform_rgb(rgb)
-
-        if self.transform_lidar:
-            lidar = self.transform_lidar(lidar)
-
-        label = torch.tensor(item["label"], dtype=torch.long)
-        return rgb, lidar, label
-
-
 class AssessmentCILPDataset(Dataset):
+    """
+    Dataset for the final assessment consisting of paired RGB images and LiDAR
+    depth maps for binary classification (cube vs. sphere).
+
+    Loads RGB (.png) and corresponding LiDAR (.npy) files, applies optional
+    RGB transforms, and returns (rgb_tensor, lidar_tensor, class_label).
+    """
     def __init__(self, root_dir, transform_rgb=None):
         self.root_dir = Path(root_dir)
         self.rgb = []
@@ -288,6 +188,59 @@ class AssessmentCILPDataset(Dataset):
             self.lidar[idx],
             self.class_idx[idx],
         )
+    
+
+def find_matching_files(classes, 
+                        rgb_root: Path, 
+                        lidar_root: Path, 
+                        rgb_subdir: Path, 
+                        lidar_subdir: Path, 
+                        rgb_ext="png", 
+                        lidar_ext="npy"
+):
+    """
+    Match RGB (.png) and LiDAR (.pcd) files by filename stem per class.
+
+    Returns:
+        dict[class_name, list[dict]] with keys: "stem", "rgb", "lidar".
+    """
+    pairs = {}
+
+    for class_name in classes:
+        rgb_dir = rgb_root / class_name / rgb_subdir
+        lidar_dir = lidar_root / class_name / lidar_subdir
+
+        # Check if directories exist
+        assert rgb_dir.exists(), f"RGB directory not found: {rgb_dir}"
+        assert lidar_dir.exists(), f"PCD directory not found: {lidar_dir}"
+
+        # Collect files
+        rgb_files = sorted(rgb_dir.glob(f"*.{rgb_ext}"))
+        lidar_files = sorted(lidar_dir.glob(f"*.{lidar_ext}"))
+
+        print(f"[{class_name}] RGB: {len(rgb_files)} | PCD: {len(lidar_files)}")
+
+        # Match by stem
+        rgb_stems = {f.stem for f in rgb_files}
+        lidar_stems = {f.stem for f in lidar_files}
+        matching = rgb_stems & lidar_stems
+
+        # Store matched pairs
+        pairs[class_name] = [
+            {
+                "stem": stem,
+                "rgb": rgb_dir / f"{stem}.{rgb_ext}",
+                "lidar": lidar_dir / f"{stem}.{lidar_ext}",
+            }
+            for stem in sorted(matching)
+        ]
+
+        if len(matching) == 0:
+            print(f"⚠️  No matching pairs found for class '{class_name}'")
+        else:
+            print(f"✅ {class_name}: {len(matching)} matched pairs")
+
+    return pairs
 
 
 def compute_dataset_mean_std(root_dir, img_size=64):
@@ -308,7 +261,7 @@ def compute_dataset_mean_std(root_dir, img_size=64):
       transforms.ToDtype(torch.float32, scale=True),  # [0,1], 4 channels
     ])
 
-    stats_dataset = AssessmentXYZADataset(
+    stats_dataset = AssessmentDataset(
         root_dir=root_dir,
         start_idx=0,
         end_idx=None,          # or e.g. 1000 to subsample
@@ -342,53 +295,6 @@ def compute_dataset_mean_std(root_dir, img_size=64):
     return mean, std
 
 
-def compute_dataset_mean_std_neu(root_dir, img_size=64, seed=51):
-    """
-    Estimate the per-channel mean and std for the RGB+LiDAR data.
-
-    Args:
-        root_dir (str or Path): Root directory passed to AssessmentXYZADataset.
-
-    Returns:
-        tuple[torch.Tensor, torch.Tensor]:
-            mean and std tensors with shape (C,).
-    """
-    stats_transforms = transforms.Compose([
-        transforms.Resize(img_size),
-        transforms.ToImage(),
-        transforms.ToDtype(torch.float32, scale=True),  # [0,1], 4 channels
-    ])
-
-    stats_dataset = AssessmentXYZADataset(
-        root_dir=root_dir,
-        transform_rgb=stats_transforms,
-        transform_lidar=None,
-        shuffle=False,
-        seed=seed
-    )
-
-    subset_size = min(2000, len(stats_dataset)*0.3)
-    subset_for_stats = create_random_subset(size=subset_size, dataset=stats_dataset)
-
-    loader = DataLoader(subset_for_stats, batch_size=64, shuffle=False)
-
-    # Accumulate running sum and sum of squares to compute mean/std
-    channel_sum = torch.zeros(4)
-    channel_sq_sum = torch.zeros(4)
-    num_pixels = 0
-
-    for rgb, _, _ in tqdm(loader, desc="Computing mean/std"):
-        # rgb shape: (B, C, H, W)
-        b, c, h, w = rgb.shape
-        num_pixels += b * h * w
-        channel_sum += rgb.sum(dim=[0, 2, 3])
-        channel_sq_sum += (rgb ** 2).sum(dim=[0, 2, 3])
-
-    mean = channel_sum / num_pixels
-    std = torch.sqrt(channel_sq_sum / num_pixels - mean ** 2)
-    return mean, std
-
-
 def get_dataloaders(root_dir, valid_batches, num_workers=2, test_frac=0.15, batch_size=64, img_transforms=None, seed=51):
     """
     Create train / val / test datasets + dataloaders.
@@ -399,7 +305,7 @@ def get_dataloaders(root_dir, valid_batches, num_workers=2, test_frac=0.15, batc
     """
 
     # 1) Base dataset: no internal shuffle, full range
-    base_dataset = AssessmentXYZADataset(
+    base_dataset = AssessmentDataset(
         root_dir,
         start_idx=0,
         end_idx=None,
@@ -541,3 +447,36 @@ def get_cilp_dataloaders(
     )
 
     return train_ds, train_loader, val_ds, val_loader, test_ds, test_loader
+
+
+def get_train_stats(dir, img_size, data_dir):
+    """
+    Load training mean and standard deviation from disk if available; otherwise compute them
+    from the training dataset and save the results for reproducibility.
+    """
+    out_dir = dir / "outputs"
+    stats_path = out_dir / "train_stats.json"
+
+    if stats_path.exists():
+        print("Load from file...")
+
+        with open(stats_path, "r") as f:
+            stats = json.load(f)
+
+        mean = stats["mean"]
+        std = stats["std"]
+
+    else:
+        # Calculates mean and standard deviation of the rgb train data
+        # for different dataset (or change in train data) recalculate mean and standard deviation
+        mean, std = compute_dataset_mean_std(root_dir=data_dir, img_size=img_size)
+        print(mean, std)
+        
+        # persist computed stats (mean/std) for reproducibility
+        out_dir.mkdir(exist_ok=True)
+
+        with open(out_dir / "train_stats.json", "w") as f:
+            json.dump({"mean": mean, "std": std}, f, indent=2)
+
+        
+    return mean, std

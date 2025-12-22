@@ -1,14 +1,19 @@
-# external large resources
-Multimodal_Learning_02/data_transformed/
-Multimodal_Learning_02/data/
-Diffusion_Model_03/data/
-Diffusion_Model_03/checkpoints/
-
-# wandb junk
+# --- Model artifacts ---
 wandb/
+
+Multimodal_Learning_02/data/
+Multimodal_Learning_02/checkpoints/
 Multimodal_Learning_02/wandb/
 Multimodal_Learning_02/notebooks/wandb/
+
+Diffusion_Model_03/checkpoints/
 Diffusion_Model_03/wandb/
 
-# OS
+# --- Data ---
+Diffusion_Model_03/data/
+
+# --- Python ---
+__pycache__/
+
+# --- OS --- 
 .DS_Store

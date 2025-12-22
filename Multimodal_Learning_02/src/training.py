@@ -3,45 +3,10 @@ from tqdm import tqdm
 import torch
 import wandb
 import numpy as np 
+import torch.nn as nn
 
 from src.visualization import print_loss
 from src.utility import format_time
-
-
-def init_wandb(model, opt_name, fusion_name='unknown', num_params=-1, batch_size=64, epochs=15):
-  """
-  Initialize a Weights & Biases run for a given fusion model.
-
-  Args:
-      model (nn.Module): The PyTorch model to track.
-      fusion_name (str): Short name of the fusion strategy (e.g. "early_fusion").
-      num_params (int): Total number of trainable parameters of the model.
-      opt_name (str): Name of the optimizer (e.g. "Adam").
-      batch_size (int, optional): Batch size used during training.
-      epochs (int, optional): Number of training epochs.
-
-  Returns:
-      wandb.sdk.wandb_run.Run: The initialized W&B run object.
-  """
-
-  config = {
-    # "embedding_size": embedding_size,      ## TODO: ändert die sich? hab ich die bei fusion?
-    "optimizer_type": opt_name,
-    "fusion_strategy": fusion_name,
-    "model_architecture": model.__class__.__name__,
-    "batch_size": batch_size,
-    "num_epochs": epochs,
-    "num_parameters": num_params
-  }
-
-  run = wandb.init(
-    project="cilp-extended-assessment",
-    name=f"{fusion_name}_run",
-    config=config,
-    reinit='finish_previous',                           # allows starting a new run inside one script
-  )
-
-  return run
 
 
 def train_model(model, optimizer, input_fn, loss_fn, epochs, train_dataloader, val_dataloader, model_save_path, target_idx=-1, log_to_wandb=False, device=None):
@@ -251,6 +216,9 @@ def get_early_inputs(batch, device=None):
 
 
 def get_rgb_inputs(batch, device):
+    """
+    Extracts and moves RGB inputs from a multimodal batch to the target device.
+    """
     rgb, lidar_xyza, pos = batch
     return (rgb.to(device),)
 
@@ -268,18 +236,16 @@ def train_with_batch_loss(
     extra_args=None,
 ):
     """
-    Generic loop for models trained from a batch-level loss:
-    - CILP contrastive (Stage 1)
-    - Projector MSE (Stage 2)
+    Generic training loop where loss is computed by a batch_loss_fn.
 
-    batch_loss_fn must take (model, batch, device) and return a scalar loss.
+    batch_loss_fn(model, batch, device, **extra_args) must return either:
+      - loss
+      - (loss, log_dict)
     """
-    train_losses = []
-    valid_losses = []
-    epoch_times = []
-
+    train_losses, val_losses, epoch_times = [], [], []
     best_val_loss = float("inf")
     max_gpu_mem_mb = 0.0
+
     use_cuda = torch.cuda.is_available()
     if use_cuda:
         torch.cuda.reset_peak_memory_stats()
@@ -293,28 +259,30 @@ def train_with_batch_loss(
         train_loss_epoch = 0.0
         for step, batch in enumerate(train_dataloader):
             optimizer.zero_grad()
+            
             loss, _ = batch_loss_fn(model, batch, device, **(extra_args or {}))
             loss.backward()
             optimizer.step()
             train_loss_epoch += loss.item()
+
         train_loss_epoch /= (step + 1)
         train_losses.append(train_loss_epoch)
         print(f"train loss: {train_loss_epoch:.4f}")
 
         # ----- VALID -----
         model.eval()
-        valid_loss_epoch = 0.0
+        val_loss_epoch = 0.0
         with torch.no_grad():
             for step, batch in enumerate(val_dataloader):
                 loss, _ = batch_loss_fn(model, batch, device, **(extra_args or {}))
-                valid_loss_epoch += loss.item()
-        valid_loss_epoch /= (step + 1)
-        valid_losses.append(valid_loss_epoch)
-        print(f"valid loss: {valid_loss_epoch:.4f}")
+                val_loss_epoch += loss.item()
+        val_loss_epoch /= (step + 1)
+        val_losses.append(val_loss_epoch)
+        print(f"valid loss: {val_loss_epoch:.4f}")
 
         # Save best model
-        if valid_loss_epoch < best_val_loss:
-            best_val_loss = valid_loss_epoch
+        if val_loss_epoch < best_val_loss:
+            best_val_loss = val_loss_epoch
             torch.save(model.state_dict(), model_save_path)
             print(f"  → New best saved (val loss {best_val_loss:.4f})")
 
@@ -336,16 +304,142 @@ def train_with_batch_loss(
                 "model": model.__class__.__name__,
                 "epoch": epoch + 1,
                 "train_loss": train_loss_epoch,
-                "valid_loss": valid_loss_epoch,
+                "val_loss": val_loss_epoch,
                 "epoch_time": epoch_time_formatted,
                 "max_gpu_mem_mb_epoch": gpu_mem_mb,
                 "lr": optimizer.param_groups[0]["lr"],
             })
 
     return {
-        "train_losses": train_losses,
-        "valid_losses": valid_losses,
+        "train_loss": train_losses,
+        "val_loss": val_losses,
         "epoch_times": epoch_times,
-        "best_valid_loss": float(best_val_loss),
+        "best_val_loss": float(best_val_loss),
+        "max_gpu_mem_mb": float(max_gpu_mem_mb),
+        "num_params": sum(p.numel() for p in model.parameters() if p.requires_grad),
+    }
+
+
+def train_classifier_with_acc(
+    model,
+    optimizer,
+    train_dataloader,
+    val_dataloader,
+    epochs,
+    model_save_path,
+    device,
+    log_to_wandb=False,
+):
+    """
+    Train a binary RGB→LiDAR classifier with BCE loss and validation accuracy.
+
+    Logs per-epoch loss, accuracy, timing, GPU memory, and saves the best model
+    based on validation loss.
+    """
+    bce = nn.BCEWithLogitsLoss()
+
+    train_losses, val_losses, val_accs, epoch_times = [], [], [], []
+    best_val_loss = float("inf")
+    best_val_acc = 0.0
+    max_gpu_mem_mb = 0.0
+
+    use_cuda = torch.cuda.is_available()
+    if use_cuda:
+        torch.cuda.reset_peak_memory_stats()
+
+    for epoch in range(epochs):
+        start_time = time.time()
+        print(f"[Classifier] Epoch {epoch+1}/{epochs}")
+
+        # ---------- TRAIN ----------
+        model.train()
+        train_loss_epoch = 0.0
+
+        for step, (imgs, _, labels) in enumerate(train_dataloader):
+            imgs = imgs.to(device)
+            labels = labels.float().view(-1, 1).to(device)  # [B,1]
+            optimizer.zero_grad()
+            logits = model(imgs)                # [B,1] – MUST be computed with grad
+            loss = bce(logits, labels)
+            loss.backward()
+            optimizer.step()
+
+            train_loss_epoch += loss.item()
+
+        train_loss_epoch /= (step + 1)
+        train_losses.append(train_loss_epoch)
+        print(f"train_loss={train_loss_epoch:.4f}")
+
+        # ---------- VALID ----------
+        model.eval()
+        val_loss_epoch = 0.0
+        correct, total = 0, 0
+
+        with torch.no_grad():
+            for step, (imgs, _, labels) in enumerate(val_dataloader):
+                imgs = imgs.to(device)
+                labels = labels.float().view(-1, 1).to(device)
+
+                logits = model(imgs)              # [B,1]
+                loss = bce(logits, labels)
+                val_loss_epoch += loss.item()
+
+                probs = torch.sigmoid(logits)     # [B,1], 0–1
+                preds = (probs >= 0.5).long()     # [B,1]
+                correct += (preds.view(-1) == labels.view(-1).long()).sum().item()
+                total += labels.size(0)
+
+        val_loss_epoch /= len(val_dataloader)
+        val_acc = correct / total
+        print(f"val_loss={val_loss_epoch:.4f}  val_acc={val_acc*100:.2f}%")
+
+        # Save best model (by val loss)
+        if val_loss_epoch < best_val_loss:
+            best_val_loss = val_loss_epoch
+            torch.save(model.state_dict(), model_save_path)
+            print(f"  → New best saved (val loss {best_val_loss:.4f})")
+
+        best_val_acc = max(best_val_acc, val_acc)
+
+        # Epoch timing
+        epoch_time = time.time() - start_time
+        epoch_times.append(epoch_time)
+        epoch_time_formatted = format_time(epoch_time)
+
+        # GPU stats
+        if use_cuda:
+            gpu_mem_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
+            max_gpu_mem_mb = max(max_gpu_mem_mb, gpu_mem_mb)
+        else:
+            gpu_mem_mb = 0.0
+
+        # wandb
+        if log_to_wandb:
+            wandb.log({
+                "model": model.__class__.__name__,
+                "epoch": epoch + 1,
+                "train_loss": train_loss_epoch,
+                "val_loss": val_loss_epoch,
+                "val_acc": val_acc,
+                "epoch_time": epoch_time_formatted,
+                "max_gpu_mem_mb_epoch": gpu_mem_mb,
+                "lr": optimizer.param_groups[0]["lr"],
+            })
+
+    return {
+        "train_loss": train_losses,
+        "val_loss": val_losses,
+        "val_acc": val_accs,
+        "epoch_times": epoch_times,
+        "best_val_loss": float(best_val_loss),
+        "best_val_acc": float(best_val_acc),
         "max_gpu_mem_mb": float(max_gpu_mem_mb),
     }
+
+
+def load_model(model, model_path, device=None):
+
+    state_dict = torch.load(model_path, weights_only=True, map_location=device)
+    model.load_state_dict(state_dict, strict=True)
+
+    return model
