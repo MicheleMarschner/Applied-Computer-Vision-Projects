@@ -221,6 +221,8 @@ Each notebook automatically:
 
 2. Loading pretrained checkpoints (optional)
 If you want to reproduce results quickly without retraining, you may load the saved models from this Drive Folder: [Drive Folder Link](https://drive.google.com/drive/folders/1c60n458cce9aY4K__lm68uMntOoPdCHH?usp=sharing)
+Furthermore all final models are available as a W&B artifact ([Link](https://wandb.ai/michele-marschner-university-of-potsdam/cilp-extended-assessment/artifacts/model/multimodal_learning02-checkpoints/v0/files)) 
+
 
 This allows you to skip training and directly run evaluation or visualization cells.
 
