@@ -44,7 +44,7 @@ Running the project in **Google Colab** is recommended for reproducibility.
    All notebooks assume this as the project root.
 
    The repo should have the following structure:
-
+   ```text
    Applied-Computer-Vision-Projects/Diffusion_Model_03/
     ├── checkpoints/                    # Pretrained models
     ├── results/                        # Saved figures, tables, and export
@@ -59,7 +59,7 @@ Running the project in **Google Colab** is recommended for reproducibility.
     ├── Bonus.ipynb                     # Bonus: MNIST classifier with IDK option
     ├── README.md                       # Project documentation
     └── requirements.txt                # Python dependencies
-
+   ```
 3. Install dependencies
 
    All necessary dependencies will be downloaded once you run the notebooks. 
@@ -114,7 +114,7 @@ conda activate [PROJECT]
 ```
 
 The repo should have the following structure:
-   
+   ```text
    Applied-Computer-Vision-Projects/Diffusion_Model_03/
     ├── checkpoints/                    # Pretrained models
     ├── results/                        # Saved figures, tables, and export
@@ -129,7 +129,7 @@ The repo should have the following structure:
     ├── Bonus.ipynb                     # Bonus: MNIST classifier with IDK option
     ├── README.md                       # Project documentation
     └── requirements.txt                # Python dependencies
-
+   ```
 2. Prepare the dataset                                                              
    The cropped flowers dataset provided by the course is used as the real-image reference for FID.
    To make the notebooks fully reproducible, please access it using the public link:
