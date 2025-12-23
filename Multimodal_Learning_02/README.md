@@ -50,7 +50,7 @@ It is recommended to run this project in **Google Colab**, as this ensures a con
    All notebooks assume this as the project root.
 
    The repo should have the following structure:
-   
+   ```text
    Applied-Computer-Vision-Projects/Multimodal_Learning_02/
    ├── notebooks/
    │   ├── 01_dataset_exploration.ipynb    # Task 2
@@ -70,7 +70,7 @@ It is recommended to run this project in **Google Colab**, as this ensures a con
    ├── results/               # Figures and tables
    ├── requirements.txt       # Dependencies
    └── README.md              # Setup and usage instructions
-
+   ```
 3. Install dependencies
 
    All necessary dependecies will be downloaded once you run the notebooks. 
@@ -88,6 +88,7 @@ It is recommended to run this project in **Google Colab**, as this ensures a con
    Creating a shortcut avoids duplicating the dataset while allowing the notebooks to access it via a fixed relative path.
 
    The dataset should have the following structure:
+   ```text
    data/assessment/
       ├── cubes/
       │   ├── rgb/*.png
@@ -95,8 +96,8 @@ It is recommended to run this project in **Google Colab**, as this ensures a con
       └── spheres/
             ├── rgb/*.png
             └── lidar/*.npy
-
-5. Set your Weights & Biases API key
+   ```
+6. Set your Weights & Biases API key
    This project logs metrics to W&B. You must create an account and a project before running the notebooks.
 
    Store the secret in Colab Secrets by opening the left sidebar → “Secrets” → “Add new secret”
@@ -111,7 +112,7 @@ It is recommended to run this project in **Google Colab**, as this ensures a con
    
    W&B will now authenticate automatically without exposing your key in the notebook.
 
-6. Open and run the notebooks in the respective order and execute each cell
+7. Open and run the notebooks in the respective order and execute each cell
 
 
 ### 3. Run Locally
@@ -129,7 +130,7 @@ conda activate [PROJECT]
 ```
 
 The repo should have the following structure:
-   
+   ```text
    Applied-Computer-Vision-Projects/Multimodal_Learning_02/
    ├── notebooks/
    │   ├── 01_dataset_exploration.ipynb    # Task 2
@@ -149,7 +150,7 @@ The repo should have the following structure:
    ├── results/               # Figures and tables
    ├── requirements.txt       # Dependencies
    └── README.md              # Setup and usage instructions
-
+   ```
 2. Prepare the dataset                                                              
    
    This project uses the assessment dataset provided by the course.
@@ -160,6 +161,7 @@ The repo should have the following structure:
    Access the dataset, download it and place it inside the repository under: Multimodal_Learning_02/data
 
    The dataset should have the following structure:
+   ```text
    data/assessment/
       ├── cubes/
       │   ├── rgb/*.png
@@ -168,8 +170,8 @@ The repo should have the following structure:
             ├── rgb/*.png
             └── lidar/*.npy
 
-
-3. Set your Weights & Biases API key                                                            
+   ```
+4. Set your Weights & Biases API key                                                            
 This project logs metrics to W&B. You must create an account and a project before running the notebooks.
 
 macOS / Linux:
