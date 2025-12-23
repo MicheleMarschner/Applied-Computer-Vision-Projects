@@ -50,6 +50,7 @@ Running the project in **Google Colab** is recommended for reproducibility.
     ├── results/                        # Saved figures, tables, and export
     ├── utils/
     │   ├── __init__.py
+    │   ├── config.py                   # Constants and Paths
     │   ├── UNet_utils.py               # U-Net architecture definition
     │   ├── ddpm_utils.py               # DDPM forward & sampling utilities
     │   └── other_utils.py              # Helper functions (seeding, timestamps, etc.)
@@ -119,6 +120,7 @@ The repo should have the following structure:
     ├── results/                        # Saved figures, tables, and export
     ├── utils/
     │   ├── __init__.py
+    │   ├── config.py                   # Constants and Paths
     │   ├── UNet_utils.py               # U-Net architecture definition
     │   ├── ddpm_utils.py               # DDPM forward & sampling utilities
     │   └── other_utils.py              # Helper functions (seeding, timestamps, etc.)
@@ -184,7 +186,7 @@ You can view all experiment runs, metrics, and logged artifacts in the public W&
 To reproduce all results shown in this project, first complete the steps in the Setup Instructions (which include installing dependencies, preparing the dataset, and setting the W&B API key).
 Once the environment is ready, proceed as follows:
 
-Execute each notebook from top to bottom without skipping cells:
+1. Execute each notebook from top to bottom without skipping cells:
     Assignment_3.ipynb
     Bonus.ipynb
 
@@ -195,6 +197,9 @@ Each notebook automatically:
 - logs metrics to Weights & Biases
 - saves results to the checkpoints/ folder
 
+2. Loading pretrained checkpoints (optional)
+All final models are available as a W&B artifact ([Link](XX)) 
+
 ## 4. Limitations
 * Low image resolution limits realism
 * Small sample size affects FID stability
@@ -204,11 +209,13 @@ Each notebook automatically:
 ## 5. Results
 All notebooks contain the results (tables, observations and interpretation) in the Evaluation section of the respective notebook. 
 
-| Component   | Metric                         | Result                         |
-|------------|--------------------------------|--------------------------------|
-| Generation | Avg. CLIP score                | 0.180                          |
-| Generation | Best guidance                  | w ≈ 0.5                        |
-| Realism    | FID                            | 327.6                          |
+Overview of final results for Assignment 3:
+
+| Metric                         | Result                         |
+|--------------------------------|--------------------------------|
+| Avg. CLIP score                | 0.212                          |
+| Best guidance                  | w ≈ 2.0                        |
+| FID                            | 320.5                          |
 
 
 ## 6. Acknowledgements

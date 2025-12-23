@@ -3,6 +3,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from PIL import Image
 import torch
+import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from datetime import datetime
@@ -11,7 +12,7 @@ import random
 import numpy as np
 import cv2
 import albumentations as A
-from pathlib import Path
+import math
 
 from utils import config
 
@@ -238,7 +239,7 @@ class GeneratedListDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        # stored as (filepath, prompt, w_val) -> we only need filepath
+        # stored as (filepath, prompt, w_val)
         filepath = self.samples[idx][0]
 
         img = Image.open(filepath).convert("RGB")
@@ -246,5 +247,57 @@ class GeneratedListDataset(Dataset):
         if self.transform:
             img = self.transform(img)
 
-        # We just return the image, FID doesn't need labels
         return img
+    
+
+def plot_samples_from_view(view, n=10, threshold=0.5, cols=5):
+    """Plot samples from a FiftyOne view with GT, prediction, confidence, and threshold."""
+    samples = view.take(n)
+    rows = math.ceil(n / cols)
+
+    plt.figure(figsize=(cols * 2.2, rows * 2.2))
+
+    for i, sample in enumerate(samples):
+        img = Image.open(sample.filepath)
+
+        gt = sample["ground_truth"].label
+        pred = sample["prediction_with_idk"].label
+        conf = sample["prediction_with_idk"].confidence
+
+        ax = plt.subplot(rows, cols, i + 1)
+        ax.imshow(img)
+        ax.axis("off")
+
+        ax.set_title(
+            f"GT: {gt} | Pred: {pred}\n"
+            f"Conf: {conf:.2f}  (τ={threshold})",
+            fontsize=8
+        )
+
+    plt.tight_layout()
+    plt.show()
+
+
+# Mnist Model Architecture
+class MNISTClassifier(nn.Module):
+    '''Lightweight CNN baseline for MNIST digit classification (used for IDK experiments).'''
+    def __init__(self):
+        super(MNISTClassifier, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+        self.relu1 = nn.ReLU()
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.relu2 = nn.ReLU()
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(64 * 7 * 7, 128)
+        self.relu3 = nn.ReLU()
+        self.fc2 = nn.Linear(128, 10)
+
+    def forward(self, x):
+        x = self.pool1(self.relu1(self.conv1(x)))
+        x = self.pool2(self.relu2(self.conv2(x)))
+        x = self.flatten(x)
+        x = self.relu3(self.fc1(x))
+        x = self.fc2(x)
+        return x
