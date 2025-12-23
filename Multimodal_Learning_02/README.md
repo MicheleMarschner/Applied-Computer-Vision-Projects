@@ -41,9 +41,13 @@ It is recommended to run this project in **Google Colab**, as this ensures a con
 2. Clone the repository
 
    ```python
+   %cd "/content/drive/MyDrive" 
    !git clone https://github.com/MicheleMarschner/Applied-Computer-Vision-Projects.git
-   %cd ./Applied-Computer-Vision-Projects/Multimodal_Learning_02                                  
+   %cd "/content/drive/MyDrive/Applied-Computer-Vision-Projects/Multimodal_Learning_02"                                
    ```
+
+   **Important:** Don’t change the project location. The repository **must** be cloned into: `/content/drive/MyDrive`
+   All notebooks assume this as the project root.
 
    The repo should have the following structure:
    
@@ -111,6 +115,7 @@ It is recommended to run this project in **Google Colab**, as this ensures a con
 
 
 ### 3. Run Locally
+If you run this locally, adapt all Colab-specific paths and commands in the notebooks and config file (e.g. `/content/drive/MyDrive`, `drive.mount`, and `%cd`).
 
 1. Run the following commands:
 ```bash

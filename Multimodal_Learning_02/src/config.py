@@ -23,7 +23,7 @@ N = 12500
 # Paths
 # --------------------
 TMP_ROOT = Path("/content")         
-DRIVE_ROOT = Path("/content/drive/MyDrive/Colab Notebooks/Applied Computer Vision/Applied-Computer-Vision-Projects/Multimodal_Learning_02/")
+DRIVE_ROOT = Path("/content/drive/MyDrive/Applied-Computer-Vision-Projects/Multimodal_Learning_02/")       # !! Change this path if the project is located elsewhere
 
 RAW_DATA = TMP_ROOT / "data"                        
 TMP_TRANSFORMED_DATA_PATH = TMP_ROOT / "data_transformed"  
