@@ -31,9 +31,8 @@ CONFIDENCE_THRESHOLD = 0.99
 # --------------------
 # Paths
 # --------------------
-TMP_ROOT = Path("/content")         # TEMP_PATH, DATA_PATH
+TMP_ROOT = Path("/content")         
 DRIVE_ROOT = Path("/content/drive/MyDrive/Colab Notebooks/Applied Computer Vision/Applied-Computer-Vision-Projects/Diffusion_Model_03")
-# STORAGE_PATH
 
 SAVE_DIR = TMP_ROOT / "generated_flowers"
 os.makedirs(SAVE_DIR, exist_ok=True) # Ensure folder exists
@@ -47,7 +46,10 @@ os.makedirs(TEMP_IMG_DIR, exist_ok=True)
 EXPORT_MNIST_DIR = TMP_ROOT / "mnist_idk_export"
 os.makedirs(EXPORT_MNIST_DIR, exist_ok=True)
 
-CHECKPOINTS_DIR = DRIVE_ROOT / "checkpoints"        # CHECKPOINTS
+DATA_DIR = TMP_ROOT / "data/cropped_flowers"
+os.makedirs(DATA_DIR, exist_ok=True)
+
+CHECKPOINTS_DIR = DRIVE_ROOT / "checkpoints" 
 CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 
 CLASSIFIER_MODEL_PATH = CHECKPOINTS_DIR / "best_mnist_classifier.pth"
