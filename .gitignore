@@ -13,6 +13,7 @@ Diffusion_Model_03/wandb/
 Diffusion_Model_03/data/
 
 # --- Python ---
+Diffusion_Model_03/utils/__pycache__/
 __pycache__/
 
 # --- OS --- 

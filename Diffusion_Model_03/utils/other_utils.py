@@ -73,6 +73,9 @@ def to_image(tensor, to_pil=True):
 
 
 def plot_generated_images(noise, result):
+    """
+    Plots the input noise and the generated image side by side.
+    """
     plt.figure(figsize=(8,8))
     nrows = 1
     ncols = 2
@@ -88,6 +91,7 @@ def plot_generated_images(noise, result):
 
 
 def get_timestamp():
+    """Return a human-readable timestamp string (YYYY-MM-DD_HH-MM) for naming files or runs."""
     return datetime.now().strftime("%Y-%m-%d_%H-%M")
 
 
