@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from einops.layers.torch import Rearrange
 
 
@@ -178,7 +179,7 @@ class UNet(nn.Module):
         return self.out(torch.cat((up2, down0), 1))
 
     
-def get_context_mask(c, drop_prob, num_classes):
+def get_context_mask(c, drop_prob, num_classes, device=None):
     c_hot = F.one_hot(c.to(torch.int64), num_classes=num_classes).to(device)
     c_mask = torch.bernoulli(torch.ones_like(c_hot).float() - drop_prob).to(device)
     return c_hot, c_mask
