@@ -208,6 +208,9 @@ All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/
 
 ## 5. Results
 All notebooks contain the results (tables, observations and interpretation) in the Evaluation section of the respective notebook. 
+The final datasets can be found on Hugging Face under:
+* Generated Flower Images: https://huggingface.co/datasets/mmarschn/generated_flowers_experiment
+* MNIST with IDK labels: https://huggingface.co/datasets/mmarschn/mnist_idk
 
 Overview of final results for Assignment 3:
 
