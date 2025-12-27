@@ -165,7 +165,7 @@ class ConcatIntermediateNet(nn.Module):
         self.xyz_encoder = embedder_cls(in_ch=xyz_ch, feature_dim=feature_dim)   
 
         # Calculate combined dimension
-        # (200 * 8 * 8) + (200 * 8 * 8)
+        # (128 * 8 * 8) + (128 * 8 * 8)
         combined_dim = self.rgb_encoder.flatten_dim + self.xyz_encoder.flatten_dim
 
         # Shared FullyConnected Head
@@ -322,7 +322,7 @@ class LateNet(nn.Module):
         self.rgb = embedder_cls(rgb_ch)
         self.xyz = embedder_cls(xyz_ch)
 
-        # each embedder outputs flatten_dim (e.g. 12800)
+        # each embedder outputs flatten_dim (e.g. 8192)
         fusion_dim = self.rgb.flatten_dim * 2  # rgb + xyz
 
         # single FullyConnected head in which data is fused
@@ -333,11 +333,11 @@ class LateNet(nn.Module):
 
     def forward(self, x_rgb, x_xyz):
         # Extract features independently
-        x_rgb = self.rgb(x_rgb)     # (B, 12800)
-        x_xyz = self.xyz(x_xyz)     # (B, 12800)
+        x_rgb = self.rgb(x_rgb)     # (B, 8192)
+        x_xyz = self.xyz(x_xyz)     # (B, 8192)
 
         # this concatenates the features from the two branches
-        x_fused = torch.cat((x_rgb, x_xyz), dim=1)    # (B, 25600)
+        x_fused = torch.cat((x_rgb, x_xyz), dim=1)    # (B, 16384)
 
         # Predict
         preds = self.fullyConnected(x_fused)           # (B, output_dim)
@@ -395,7 +395,6 @@ class ContrastivePretraining(nn.Module):
             img_emb.unsqueeze(1),      # (B, 1, D_cilp)
             lidar_emb.unsqueeze(0),    # (1, B, D_cilp)
         )                              # (B, B)
-        # similarity = (similarity + 1) / 2         ## TODO: überlegen ob rein oder nicht
 
         logits_per_img = similarity          # img → lidar      # (B,B)
         logits_per_lidar = similarity.T      # lidar → img      # (B,B)
