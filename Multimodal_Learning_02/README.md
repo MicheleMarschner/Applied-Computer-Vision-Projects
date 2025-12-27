@@ -209,11 +209,18 @@ You can view all experiment runs, metrics, and logged artifacts in the public W&
 ---
 
 ## 4. Instructions to Reproduce Results
-To reproduce all results shown in this project, first complete the steps in the Setup Instructions (which include installing dependencies, preparing the dataset, and setting the W&B API key).
-Once the environment is ready, proceed as follows:
 
-1. Run the notebooks in order
-Execute each notebook from top to bottom without skipping cells:
+
+### 1. Prerequisites
+To reproduce all results shown in this project, first complete the steps in the Setup Instructions (which include installing dependencies, preparing the dataset, and setting the W&B API key).
+
+### 2. Reproducibility
+**The seed function ensures reproducibility.**
+A global seeding mechanism is implemented at the start of every notebook to fix the random number generators for Python, NumPy, and PyTorch. This guarantees that data splits, weight initializations, and batch ordering remain consistent across runs.
+
+### 3. Running the Experiments
+The notebooks are designed to be run in isolation (loading data, splitting data). The  Once your environment is ready, you can execute the notebooks in the following order. Please run them from top to bottom without skipping cells.
+
 notebooks/01_dataset_exploration.ipynb
 notebooks/02_fusion_comparison.ipynb
 notebooks/03_strided_conv_ablation.ipynb
@@ -226,14 +233,14 @@ Each notebook automatically:
 - logs metrics to Weights & Biases
 - saves results to the checkpoints/ folder
 
-2. Loading pretrained checkpoints (optional)
+**Loading pretrained checkpoints (optional)**
 If you want to reproduce results quickly without retraining, you may load the saved models from this Drive Folder: [Drive Folder Link](https://drive.google.com/drive/folders/1c60n458cce9aY4K__lm68uMntOoPdCHH?usp=sharing)
 Furthermore all final models are available as a W&B artifact ([Link](https://wandb.ai/michele-marschner-university-of-potsdam/cilp-extended-assessment/artifacts/model/multimodal_learning02-checkpoints/v0/files)) 
 
-
 This allows you to skip training and directly run evaluation or visualization cells.
 
-3. Normalization statistics (mean and standard deviation) are computed using 2,000 samples from the training split. These statistics are then applied to all training, validation, and test samples to avoid data leakage. For the experiments all training data and validation data has been used. There is a separate test set which could be used for further hyperparameter search. 
+**Note**:
+Normalization statistics (mean and standard deviation) are computed using 2,000 samples from the training split. These statistics are then applied to all training, validation, and test samples to avoid data leakage. For the experiments all training data and validation data has been used. There is a separate test set which could be used for further hyperparameter search. 
 
 ## 5. Limitations
 - The dataset is small and synthetically generated, limiting real-world generalization
