@@ -11,7 +11,7 @@ SEED = 51
 # General experiment
 # --------------------
 
-# Constants for Assignment 3
+# Constants for Assignment 3 and further experiments
 BATCH_SIZE = 32
 CLIP_FEATURES = 512
 TIMESTEPS = 400       # Number of timesteps
@@ -20,6 +20,7 @@ INCEPTION_IMG_SIZE = 299
 IMG_CH = 3
 INPUT_SIZE = (IMG_CH, IMG_SIZE, IMG_SIZE)
 FIFTYONE_DATASET_NAME = "generated_flowers_experiment"
+FIFTYONE_DATASET_EXPERIMENTS_NAME = "generated_flowers_experiment_02"
 W_TESTS = [-2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0]
 CLASSES = ["daisy", "roses", "sunflowers"]
 

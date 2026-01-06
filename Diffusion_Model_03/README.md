@@ -47,7 +47,13 @@ Running the project in **Google Colab** is recommended for reproducibility.
    ```text
    Applied-Computer-Vision-Projects/Diffusion_Model_03/
     ├── checkpoints/                    # Pretrained models
+    ├── notebooks/
+    │   ├── Assignment_3.ipynb          # Main assignment notebook
+    │   ├── Further_experiments.ipynb   # Notebook with further experiments
+    │   ├── Bonus.ipynb                 # Bonus: MNIST classifier with IDK option
+    │
     ├── results/                        # Saved figures, tables, and export
+    │
     ├── utils/
     │   ├── __init__.py
     │   ├── config.py                   # Constants and Paths
@@ -55,8 +61,6 @@ Running the project in **Google Colab** is recommended for reproducibility.
     │   ├── ddpm_utils.py               # DDPM forward & sampling utilities
     │   └── other_utils.py              # Helper functions (seeding, timestamps, etc.)
     │
-    ├── Assignment_3.ipynb              # Main assignment notebook
-    ├── Bonus.ipynb                     # Bonus: MNIST classifier with IDK option
     ├── README.md                       # Project documentation
     └── requirements.txt                # Python dependencies
    ```
@@ -117,7 +121,13 @@ The repo should have the following structure:
    ```text
    Applied-Computer-Vision-Projects/Diffusion_Model_03/
     ├── checkpoints/                    # Pretrained models
+    ├── notebooks/
+    │   ├── Assignment_3.ipynb          # Main assignment notebook
+    │   ├── Further_experiments.ipynb   # Notebook with further experiments
+    │   ├── Bonus.ipynb                 # Bonus: MNIST classifier with IDK option
+    │
     ├── results/                        # Saved figures, tables, and export
+    │
     ├── utils/
     │   ├── __init__.py
     │   ├── config.py                   # Constants and Paths
@@ -125,8 +135,6 @@ The repo should have the following structure:
     │   ├── ddpm_utils.py               # DDPM forward & sampling utilities
     │   └── other_utils.py              # Helper functions (seeding, timestamps, etc.)
     │
-    ├── Assignment_3.ipynb              # Main assignment notebook
-    ├── Bonus.ipynb                     # Bonus: MNIST classifier with IDK option
     ├── README.md                       # Project documentation
     └── requirements.txt                # Python dependencies
    ```
@@ -188,17 +196,18 @@ Once the environment is ready, proceed as follows:
 
 1. Execute each notebook from top to bottom without skipping cells:
     Assignment_3.ipynb
+    Further_experiments.ipynb
     Bonus.ipynb
 
 Each notebook automatically:
 - loads the dataset
 - sets random seeds for reproducibility
-- trains the corresponding model (unless you have pretrained models in the checkpoints folder) 
+- trains the corresponding model (you will need the weights of the pre-trained models under the link below) 
 - logs metrics to Weights & Biases
 - saves results to the checkpoints/ folder
 
-2. Loading pretrained checkpoints (optional)
-All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/michele-marschner-university-of-potsdam/diffusion_model_assessment_v2/runs/ps80y8lb)) 
+2. Loading pretrained checkpoints
+All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/michele-marschner-university-of-potsdam/diffusion_model_assessment_v2/artifacts/model/diffusion_models03-checkpoints/v0/files)) 
 
 ## 4. Limitations
 * Low image resolution limits realism
@@ -208,17 +217,16 @@ All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/
 
 ## 5. Results
 All notebooks contain the results (tables, observations and interpretation) in the Evaluation section of the respective notebook. 
-The final datasets can be found on Hugging Face under:
-* Generated Flower Images: https://huggingface.co/datasets/mmarschn/generated_flowers_experiment
-* MNIST with IDK labels: https://huggingface.co/datasets/mmarschn/mnist_idk
+The final datasets can be found on Hugging Face:
+* [Generated Flower Images:](https://huggingface.co/datasets/mmarschn/generated_flowers_experiment)
+* [MNIST with IDK labels:](https://huggingface.co/datasets/mmarschn/mnist_idk)
 
-Overview of final results for Assignment 3:
+Overview of final results for Assignment 3 and further experiments:
 
-| Metric                         | Result                         |
-|--------------------------------|--------------------------------|
-| Avg. CLIP score                | 0.212                          |
-| Best guidance                  | w ≈ 2.0                        |
-| FID                            | 320.5                          |
+| Metric          | Baseline (N = 21) | Filtered (N = 480) | Improvement |
+|-----------------|------------------:|-------------------:|------------:|
+| Avg. CLIP score | 0.212             | 0.259              | +22.1%      |
+| FID             | 320.5             | 239.2              | −25.3%      |
 
 
 ## 6. Acknowledgements
