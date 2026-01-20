@@ -15,6 +15,11 @@ import albumentations as A
 import math
 from torchvision.transforms import ToPILImage
 import fiftyone as fo
+import torch.nn.functional as Func
+from fiftyone import ViewField as F
+from collections import Counter
+import pandas as pd
+from collections import defaultdict
 
 from utils import config
 
@@ -252,29 +257,28 @@ class GeneratedListDataset(Dataset):
         return img
     
 
-def plot_samples_from_view(view, n=10, threshold=0.5, cols=5):
-    """Plot samples from a FiftyOne view with GT, prediction, confidence, and threshold."""
+def plot_samples_from_view(view, n=10, cols=5):
+    """Plot samples from a FiftyOne view with conditioning label, prediction, and confidence."""
     samples = view.take(n)
     rows = math.ceil(n / cols)
 
-    plt.figure(figsize=(cols * 2.2, rows * 2.2))
+    plt.figure(figsize=(cols * 2.4, rows * 2.4))
 
     for i, sample in enumerate(samples):
+        # Load image from the filepath stored in the FiftyOne sample
         img = Image.open(sample.filepath)
 
-        gt = sample["ground_truth"].label
-        pred = sample["prediction_with_idk"].label
-        conf = sample["prediction_with_idk"].confidence
+        # Read stored fields (adapted to your dataset schema)
+        cond = sample["conditioning"].label
+        pred = sample["prediction"].label
+        conf = sample["prediction"].confidence
 
         ax = plt.subplot(rows, cols, i + 1)
         ax.imshow(img)
         ax.axis("off")
 
-        ax.set_title(
-            f"GT: {gt} | Pred: {pred}\n"
-            f"Conf: {conf:.2f}  (τ={threshold})",
-            fontsize=8
-        )
+        # Show conditioning label (requested digit), predicted label (digit/IDK), and confidence
+        ax.set_title(f"Cond: {cond} | Pred: {pred}\nConf: {conf:.2f}", fontsize=8)
 
     plt.tight_layout()
     plt.show()
@@ -341,6 +345,36 @@ class MNISTClassifier(nn.Module):
         x = self.relu3(self.fc1(x))
         x = self.fc2(x)
         return x
+
+# Mnist Model Architecture for IDK class bonus task  
+class ModernLeNet5(nn.Module):
+    def __init__(self, num_classes=10):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 6, kernel_size=5)
+        self.conv2 = nn.Conv2d(6, 16, kernel_size=5)
+        self.conv3 = nn.Conv2d(16, 120, kernel_size=4)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.fc1 = nn.Linear(120, 84)
+        self.fc2 = nn.Linear(84, num_classes)
+        self.dropout = nn.Dropout(0.5)
+
+        # Will store the latest fc1 activations (batch x 84)
+        self.last_embedding = None
+
+    def forward(self, x):
+        x = self.pool(Func.relu(self.conv1(x)))
+        x = self.pool(Func.relu(self.conv2(x)))
+        x = Func.relu(self.conv3(x))
+        x = x.view(x.size(0), -1)
+
+        emb = self.fc1(x)          # pre-activation embedding
+        self.last_embedding = emb  # save for inspection/extraction
+
+        x = Func.relu(emb)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
+    
     
 def create_FiftyOne_dataset(samples, extracted_embeddings, clip_scores):
     """
@@ -383,206 +417,114 @@ def create_FiftyOne_dataset(samples, extracted_embeddings, clip_scores):
 
     return dataset
 
-import numpy as np
-import torch
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-
-def plot_confidence_distribution(model, loader, device):
+def rescale_to_unit_interval_and_stretch(x_gen):
     """
-    Computes and visualizes the classifier's confidence distribution, split by
-    whether predictions are correct or incorrect.
-
-    Output:
-      - A plot with two confidence histograms (correct vs incorrect)
-      - Two lists: (confidences_correct, confidences_incorrect)
-
-    Confidence definition:
-      - For each image, the classifier produces a probability distribution over classes.
-      - Confidence is the maximum class probability (max softmax / max probability).
-
-    Probability computation assumption:
-      - This code assumes `model(images)` returns log-probabilities (e.g., output of log_softmax).
-      - In that case, `torch.exp(log_probs)` converts them to probabilities.
-      - If `model(images)` returns logits instead, replace `torch.exp(output)` with
-        `torch.softmax(output, dim=1)`.
+    x_gen: diffusion output in [-1, 1], shape typically [1, 1, 28, 28]
+    returns: [0, 1] tensor, same shape, with contrast stretching
     """
-    model.eval()
+    img_01 = (x_gen.clamp(-1, 1) + 1.0) / 2.0
 
-    # Store max-probability confidences for correct vs incorrect predictions
-    conf_correct = []
-    conf_incorrect = []
+    mn = img_01.amin(dim=(-2, -1), keepdim=True)
+    mx = img_01.amax(dim=(-2, -1), keepdim=True)
+    den = (mx - mn).clamp_min(1e-6)  # avoid divide-by-zero
+    img_01 = (img_01 - mn) / den
 
-    with torch.no_grad():
-        for images, labels in loader:
-            images = images.to(device)
-            labels = labels.to(device)
+    return img_01.clamp(0, 1)
 
-            # Model output is treated as log-probabilities; exponentiation yields probabilities
-            log_probs = model(images)
-            probs = torch.exp(log_probs)
 
-            # Confidence: max class probability; Prediction: argmax class index
-            max_confidence, pred_class = torch.max(probs, dim=1)
+def normalize_for_lenet(img):
+    return (img - 0.1307) / 0.3081       # MNIST Normalize((0.1307,), (0.3081,))
 
-            # Separate confidences by correctness to analyze calibration/uncertainty behavior
-            is_correct = pred_class.eq(labels)
-            conf_correct.extend(max_confidence[is_correct].cpu().numpy())
-            conf_incorrect.extend(max_confidence[~is_correct].cpu().numpy())
 
-    # --------------------- Plot ---------------------
-    # Visualization goal: show whether incorrect predictions tend to have lower confidence.
-    sns.set_style("whitegrid")
-    plt.rcParams["figure.dpi"] = 110
+def plot_confidence_histograms(dataset, bins=20, figsize=(7, 4)):
+    """Plot confidence histograms for IDK vs non-IDK predictions in a FiftyOne dataset."""
+    idk_conf = dataset.match(F("prediction.label") == "IDK").values("prediction.confidence")
+    ok_conf  = dataset.match(F("prediction.label") != "IDK").values("prediction.confidence")
 
-    fig, ax = plt.subplots(figsize=(6.2, 4.2))
-
-    color_correct = "#8EC5FF"
-    color_incorrect = "#FFB3C7"
-
-    # Step histograms make overlap/comparison easy (distinct from filled KDE plot style)
-    ax.hist(
-        conf_correct,
-        bins=30,
-        density=True,
-        histtype="step",
-        linewidth=2.2,
-        alpha=0.95,
-        label="Correct",
-        color=color_correct,
-    )
-    ax.hist(
-        conf_incorrect,
-        bins=30,
-        density=True,
-        histtype="step",
-        linewidth=2.2,
-        alpha=0.95,
-        label="Incorrect",
-        color=color_incorrect,
-    )
-
-    # Median lines provide a simple summary of where the bulk of each distribution lies
-    med_correct = float(np.median(conf_correct)) if len(conf_correct) else np.nan
-    med_incorrect = float(np.median(conf_incorrect)) if len(conf_incorrect) else np.nan
-    if not np.isnan(med_correct):
-        ax.axvline(med_correct, linestyle="--", linewidth=1.8, alpha=0.8, color=color_correct)
-    if not np.isnan(med_incorrect):
-        ax.axvline(med_incorrect, linestyle="--", linewidth=1.8, alpha=0.8, color=color_incorrect)
-
-    ax.set_title("Confidence distribution (Correct vs Incorrect)", fontsize=13, pad=10)
-    ax.set_xlabel("Confidence (max class probability)", fontsize=12, labelpad=8)
-    ax.set_ylabel("Density", fontsize=12, labelpad=8)
-
-    ax.set_xlim(0.0, 1.0)
-    ax.tick_params(direction="out", length=5, width=1.4, labelsize=11)
-
-    sns.despine(ax=ax)
-    ax.legend(frameon=True, fontsize=10)
-
+    plt.figure(figsize=figsize)
+    plt.hist(ok_conf, bins=bins, alpha=0.7, label="Non-IDK")
+    plt.hist(idk_conf, bins=bins, alpha=0.7, label="IDK")
+    plt.xlabel("Prediction confidence")
+    plt.ylabel("Count")
+    plt.legend()
     plt.tight_layout()
-    plt.show()
 
-    return conf_correct, conf_incorrect
+    return plt.figure
 
 
-def find_stability_limit(coverages, accuracies):
-    """
-    Identifies the "elbow" point of an accuracy–coverage curve.
+def idk_frequency_table(dataset):
+  """Return a table of IDK counts and rates per conditioning digit."""
+  idk_view = dataset.match(F("prediction.label") == "IDK")
+  counts = Counter(s["conditioning"].label for s in idk_view)
+  all_counts = Counter(s["conditioning"].label for s in dataset)
 
-    Intended use:
-      - When sweeping an IDK confidence threshold, coverage decreases as the model
-        rejects more samples, while accuracy on the remaining (accepted) samples
-        typically increases.
-      - The elbow is a heuristic point where returns diminish: accuracy gains start
-        flattening relative to the loss in coverage.
+  df_idk = pd.DataFrame(sorted(all_counts.items(), key=lambda x: int(x[0])), columns=["digit", "total"])
+  df_cnt = pd.DataFrame(sorted(counts.items(), key=lambda x: int(x[0])), columns=["digit", "idk_count"])
 
-    Method:
-      - Treat the curve as points (coverage_i, accuracy_i).
-      - Compute perpendicular distance of each point to the straight line between
-        the first and last points.
-      - Return the index with the maximum distance (classic elbow heuristic).
-    """
-    cov = np.asarray(coverages, dtype=float)
-    acc = np.asarray(accuracies, dtype=float)
+  df = df_idk.merge(df_cnt, on="digit", how="left").fillna({"idk_count": 0})
+  df["idk_count"] = df["idk_count"].astype(int)
 
-    start = np.array([cov[0], acc[0]])
-    end = np.array([cov[-1], acc[-1]])
+  total_idk = max(len(idk_view), 1)
+  df["idk_share"] = (df["idk_count"] / total_idk).round(3)
+  df["idk_rate_per_digit"] = (df["idk_count"] / df["total"]).round(3)
 
-    numerator = np.abs(
-        (end[1] - start[1]) * cov
-        - (end[0] - start[0]) * acc
-        + end[0] * start[1]
-        - end[1] * start[0]
+  return df
+
+
+def guidance_stats(dataset, guidance_list):
+    """Print coverage and IDK rate for each guidance weight."""
+    stats = defaultdict(dict)
+
+    for w in sorted(guidance_list):
+        view = dataset.match(F("guidance_w") == w)
+        total = len(view)
+        idk = len(view.match(F("prediction.label") == "IDK"))
+
+        stats[w]["coverage"] = 1 - idk / total if total > 0 else 0.0
+        stats[w]["idk_rate"] = idk / total if total > 0 else 0.0
+
+    for w in sorted(stats):
+        print(f"w={w}: coverage={stats[w]['coverage']:.2%}, idk={stats[w]['idk_rate']:.2%}")
+
+    return stats
+
+
+def report_coverage_accuracy(dataset):
+    """Print coverage and accuracy metrics for an IDK classifier on a FiftyOne dataset."""
+    total = len(dataset)
+
+    idk_view = dataset.match(F("prediction.label") == "IDK")
+    idk = len(idk_view)
+
+    covered_view = dataset.match(F("prediction.label") != "IDK")
+    covered = len(covered_view)
+
+    coverage = covered / total if total > 0 else 0.0
+
+    correct_covered_view = covered_view.match(
+        F("prediction.label") == F("conditioning.label")
     )
-    denominator = np.sqrt((end[1] - start[1]) ** 2 + (end[0] - start[0]) ** 2) + 1e-12
+    correct = len(correct_covered_view)
 
-    distances = numerator / denominator
-    return int(np.argmax(distances))
+    acc_covered = correct / covered if covered > 0 else 0.0
+    acc_standard = correct / total if total > 0 else 0.0
 
+    print(f"Total Test Images:    {total}")
+    print(f"IDK Responses:        {idk}")
+    print(f"Covered Responses:    {covered}")
+    print("-" * 30)
+    print(f"COVERAGE:             {coverage:.2%}")
+    print(f"ACCURACY (Covered):   {acc_covered:.2%}")
+    print(f"ACCURACY (Standard):  {acc_standard:.2%}")
+    print("=" * 50)
 
-def plot_acc_coverage_curve(coverages, accuracies):
-    """
-    Plots the accuracy–coverage tradeoff for an IDK-threshold sweep and highlights
-    the elbow point.
-
-    Inputs:
-      - coverages: list/array of acceptance rates (fraction of samples not rejected)
-      - accuracies: list/array of accuracy on accepted samples for each threshold
-
-    Output:
-      - A plot showing the curve (points correspond to thresholds)
-      - Returns (elbow_accuracy, elbow_coverage) for reporting or threshold selection
-
-    Visualization choices:
-      - Markers show that the curve consists of discrete threshold settings.
-      - Vertical/horizontal guide lines make the elbow readable.
-      - A small annotation summarizes elbow coordinates.
-    """
-    elbow_idx = find_stability_limit(coverages, accuracies)
-    elbow_acc = float(accuracies[elbow_idx])
-    elbow_cov = float(coverages[elbow_idx])
-
-    sns.set_style("whitegrid")
-    plt.rcParams["figure.dpi"] = 110
-
-    fig, ax = plt.subplots(figsize=(6.2, 4.2))
-
-    ax.plot(
-        coverages,
-        accuracies,
-        linewidth=2.6,
-        marker="o",
-        markersize=4.5,
-        label="Threshold sweep",
-    )
-
-    ax.axvline(elbow_cov, linestyle="--", linewidth=1.6, alpha=0.75)
-    ax.axhline(elbow_acc, linestyle="--", linewidth=1.6, alpha=0.75)
-    ax.scatter(elbow_cov, elbow_acc, s=70, zorder=5, label="Elbow")
-
-    ax.annotate(
-        f"Elbow\ncov={elbow_cov:.3f}\nacc={elbow_acc:.3f}",
-        xy=(elbow_cov, elbow_acc),
-        xytext=(10, -10),
-        textcoords="offset points",
-        fontsize=10,
-        bbox=dict(boxstyle="round,pad=0.25", alpha=0.15),
-    )
-
-    ax.set_title("Accuracy–Coverage curve (IDK option)", fontsize=13, pad=10)
-    ax.set_xlabel("Coverage (fraction accepted)", fontsize=12, labelpad=8)
-    ax.set_ylabel("Accuracy on accepted samples", fontsize=12, labelpad=8)
-
-    sns.despine(ax=ax)
-    ax.legend(frameon=True, fontsize=10)
-    ax.tick_params(direction="out", length=5, width=1.4, labelsize=11)
-
-    plt.tight_layout()
-    plt.show()
-
-    return elbow_acc, elbow_cov
-
-
-
+    return {
+        "total": total,
+        "idk": idk,
+        "covered": covered,
+        "coverage": coverage,
+        "correct_covered": correct,
+        "accuracy_covered": acc_covered,
+        "accuracy_standard": acc_standard,
+    }

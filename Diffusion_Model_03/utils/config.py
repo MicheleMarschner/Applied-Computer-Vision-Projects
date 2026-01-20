@@ -29,9 +29,12 @@ HF_EXPERIMENT_REPO_ID = "mmarschn/generated_optimized_flowers_experiment"
 
 
 # Constants for Bonus
+N_SAMPLES = 200  
 BATCH_SIZE_CLASSIFIER = 64
 FIFTYONE_BONUS_DATASET_NAME = "mnist_idk_experiment"
 CONFIDENCE_THRESHOLD = 0.99
+GUIDANCE_LIST = [0.0, 1.0, 2.0]
+BATCH_ADD = 500
 
 # --------------------
 # Paths
@@ -58,7 +61,9 @@ CHECKPOINTS_DIR = DRIVE_ROOT / "checkpoints"
 CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 
 CLASSIFIER_MODEL_PATH = CHECKPOINTS_DIR / "best_mnist_classifier.pth"
-UNET_MODEL_PATH = CHECKPOINTS_DIR / "uNet.pt"
+CLASSIFIER_IDK_MODEL_PATH = CHECKPOINTS_DIR / "idk_classifier_lenet_2.pth"
+UNET_MODEL_PATH = CHECKPOINTS_DIR / "uNet.pth"
+UNET_MNIST_MODEL_PATH = CHECKPOINTS_DIR / "ddpm_unet.pth"
 
 # --------------------
 # General

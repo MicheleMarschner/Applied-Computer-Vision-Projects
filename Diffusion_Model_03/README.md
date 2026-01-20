@@ -220,7 +220,7 @@ All notebooks contain the results (tables, observations and interpretation) in t
 The final datasets can be found on Hugging Face:
 * [Generated Flower Images:](https://huggingface.co/datasets/mmarschn/generated_flowers_experiment)
 * [Generated Optimized Flower Images:](https://huggingface.co/datasets/mmarschn/generated_optimized_flowers_experiment)
-* [MNIST with IDK labels:](https://huggingface.co/datasets/mmarschn/mnist_idk)
+* [MNIST with IDK labels:](https://huggingface.co/datasets/mmarschn/mnist_idk_experiment)
 
 Overview of final results for Assignment 3 and further experiments:
 
