@@ -207,7 +207,7 @@ Each notebook automatically:
 - saves results to the checkpoints/ folder
 
 2. Loading pretrained checkpoints
-All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/michele-marschner-university-of-potsdam/diffusion_model_assessment_v2/artifacts/model/diffusion_models03-checkpoints/v0/files)) 
+All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/michele-marschner-university-of-potsdam/diffusion_model_assessment_v2/artifacts/model/diffusion_models03-final-checkpoints/v0/files)) 
 
 ## 4. Limitations
 * Low image resolution limits realism
