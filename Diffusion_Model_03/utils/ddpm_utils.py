@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import clip
 
 from utils import other_utils
 
@@ -136,3 +137,65 @@ def sample_w(
 
     x_t_store = torch.stack(x_t_store)
     return x_t, x_t_store
+
+
+# Store intermediate feature maps extracted via forward hooks
+embeddings_storage = {}
+
+def get_embedding_hook(name):
+    """
+    Creates a forward hook that stores the output of a given layer.
+
+    The output is detached from the computation graph to avoid
+    gradient tracking and reduce memory usage.
+    """
+    def hook(model, input, output):
+        # We use .detach() to disconnect from the gradient graph (saves memory)
+        embeddings_storage[name] = output.detach()
+    return hook
+
+
+def sample_flowers_with_hook(text_list, model, clip_model, ddpm, input_size, T, device, w, num_repetitions=10):
+    """
+    Generates images from text prompts using classifier-free guided diffusion
+    while capturing intermediate U-Net embeddings via a forward hook.
+
+    Args:
+        text_list (list[str]): Text prompts used for conditioning.
+        model (nn.Module): Pretrained U-Net diffusion model.
+        ddpm: Diffusion process wrapper.
+        input_size (tuple): Spatial size of generated images.
+        T (int): Number of diffusion timesteps.
+        device (torch.device): Computation device.
+
+    Returns:
+        torch.Tensor: Final generated images.
+        torch.Tensor: Stored intermediate diffusion states (for visualization).
+    """
+    all_generated_images = []
+    all_extracted_embeddings = []
+
+    # Encode text prompts using CLIP
+    text_tokens = clip.tokenize(text_list).to(device)
+    with torch.no_grad():
+      c = clip_model.encode_text(text_tokens).float()
+
+    for rep in range(num_repetitions):
+      print(f"  Running repetition {rep+1}/{num_repetitions}...")
+
+      # Run diffusion sampling with classifier-free guidance
+      x_gen, _ = sample_w(model, ddpm, input_size, T, c, device, w)
+
+      # Grabs the embedding from the hook storage before it gets overwritten
+      # As the images are doubled, we keep only the conditioned ones
+      current_batch_embs = embeddings_storage['down2'][:x_gen.shape[0]].detach().cpu()
+
+      # Store both images and embeddings
+      all_generated_images.append(x_gen.detach().cpu())
+      all_extracted_embeddings.append(current_batch_embs)
+
+    # Concatenate all repetitions into single large tensors
+    final_images = torch.cat(all_generated_images, dim=0)
+    final_embeddings = torch.cat(all_extracted_embeddings, dim=0)
+
+    return final_images, final_embeddings

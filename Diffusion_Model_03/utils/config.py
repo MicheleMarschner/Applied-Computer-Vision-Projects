@@ -20,9 +20,13 @@ INCEPTION_IMG_SIZE = 299
 IMG_CH = 3
 INPUT_SIZE = (IMG_CH, IMG_SIZE, IMG_SIZE)
 FIFTYONE_DATASET_NAME = "generated_flowers_experiment"
-FIFTYONE_DATASET_EXPERIMENTS_NAME = "generated_flowers_experiment_02"
+FIFTYONE_DATASET_EXPERIMENTS_NAME = "generated_optimized_flowers_experiment"
 W_TESTS = [-2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0]
+W_OPT = [1.0, 2.0, 3.0]
 CLASSES = ["daisy", "roses", "sunflowers"]
+HF_BASE_REPO_ID = "mmarschn/generated_flowers_experiment"
+HF_EXPERIMENT_REPO_ID = "mmarschn/generated_optimized_flowers_experiment"
+
 
 # Constants for Bonus
 BATCH_SIZE_CLASSIFIER = 64
@@ -33,7 +37,7 @@ CONFIDENCE_THRESHOLD = 0.99
 # Paths
 # --------------------
 TMP_ROOT = Path("/content")         
-DRIVE_ROOT = Path("/content/drive/MyDrive/Applied-Computer-Vision-Projects/Diffusion_Model_03")
+DRIVE_ROOT = Path("/content/drive/MyDrive/Applied-Computer-Vision-Projects/Diffusion_Model_03")              # !! Change this path if the project is located elsewhere (repeat in notebooks)
 
 SAVE_DIR = TMP_ROOT / "generated_flowers"
 os.makedirs(SAVE_DIR, exist_ok=True) # Ensure folder exists

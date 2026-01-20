@@ -15,7 +15,7 @@ The goal is to:
 
 ## Setup
 
-Running the project in **Google Colab** is recommended for reproducibility.
+Running the project in **Google Colab** is recommended for reproducibility. For running it locally change the colab specific funtions. 
 
 ### 1. Requirements
 
@@ -219,14 +219,15 @@ All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/
 All notebooks contain the results (tables, observations and interpretation) in the Evaluation section of the respective notebook. 
 The final datasets can be found on Hugging Face:
 * [Generated Flower Images:](https://huggingface.co/datasets/mmarschn/generated_flowers_experiment)
+* [Generated Optimized Flower Images:](https://huggingface.co/datasets/mmarschn/generated_optimized_flowers_experiment)
 * [MNIST with IDK labels:](https://huggingface.co/datasets/mmarschn/mnist_idk)
 
 Overview of final results for Assignment 3 and further experiments:
 
-| Metric          | Baseline (N = 21) | Filtered (N = 480) | Improvement |
+| Metric          | Baseline (N = 21) | Optimized (N=1440) | Improvement |
 |-----------------|------------------:|-------------------:|------------:|
 | Avg. CLIP score | 0.212             | 0.259              | +22.1%      |
-| FID             | 320.5             | 239.2              | −25.3%      |
+| FID             | 320.5             | 230.2              | −28.2%      |
 
 
 ## 6. Acknowledgements

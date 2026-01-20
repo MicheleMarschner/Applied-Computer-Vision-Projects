@@ -13,6 +13,8 @@ import numpy as np
 import cv2
 import albumentations as A
 import math
+from torchvision.transforms import ToPILImage
+import fiftyone as fo
 
 from utils import config
 
@@ -278,6 +280,44 @@ def plot_samples_from_view(view, n=10, threshold=0.5, cols=5):
     plt.show()
 
 
+def save_samples_to_disk(generated_images, text_prompts, w, save_dir, repetition_size, n_weights, n_samples):
+    """
+    Save generated images ([-1, 1]) as PNGs and return per-sample metadata
+    (path, prompt, guidance weight w), assuming sampling order is grouped by
+    repetitions × w_tests × text_prompts.
+    """
+
+    # Save generated images to disk for downstream evaluation
+    to_pil = ToPILImage()
+
+    # Track saved image paths together with their prompts and guidance values
+    saved_samples = []
+
+    print("Saving images to disk...")
+    assert len(generated_images) == n_samples, (
+        f"generated_images={len(generated_images)} != {n_samples}"
+    )
+
+    for i, img_tensor in enumerate(generated_images):
+        # Recover prompt and guidance value from the sampling order
+        idx_within_rep = i % (repetition_size * n_weights)
+        prompt = text_prompts[idx_within_rep % repetition_size]
+        w_val = w[idx_within_rep // repetition_size]
+
+        # Map model output from [-1, 1] to [0, 1] for image saving and clip any artifacts that fell outside the valid range
+        img_norm = ((img_tensor + 1) / 2).clamp(0, 1).detach().cpu()
+        pil_img = to_pil(img_norm)
+
+        filename = os.path.join(
+            save_dir, f"flower_w{w_val:+.1f}_p{idx_within_rep % repetition_size}_{i}.png"
+        )
+        pil_img.save(filename)
+
+        saved_samples.append((filename, prompt, float(w_val)))
+
+    print("All images saved.")
+    return saved_samples
+
 # Mnist Model Architecture
 class MNISTClassifier(nn.Module):
     '''Lightweight CNN baseline for MNIST digit classification (used for IDK experiments).'''
@@ -301,3 +341,248 @@ class MNISTClassifier(nn.Module):
         x = self.relu3(self.fc1(x))
         x = self.fc2(x)
         return x
+    
+def create_FiftyOne_dataset(samples, extracted_embeddings, clip_scores):
+    """
+    Create (or replace) a FiftyOne dataset of generated images with metadata
+    (prompt, guidance w, CLIP score) and flattened U-Net embeddings for
+    FiftyOne Brain analysis (uniqueness/representativeness).
+    """
+
+    # Delete existing dataset if it exists
+    if config.FIFTYONE_DATASET_EXPERIMENTS_NAME in fo.list_datasets():
+        print(f"Deleting existing dataset: {config.FIFTYONE_DATASET_EXPERIMENTS_NAME}")
+        fo.delete_dataset(config.FIFTYONE_DATASET_EXPERIMENTS_NAME)
+
+    dataset = fo.Dataset(name=config.FIFTYONE_DATASET_EXPERIMENTS_NAME)
+
+    # Build a FiftyOne dataset where each image is paired with prompt, guidance w,
+    # CLIP score, and a flattened U-Net embedding (used for embedding-based analysis)
+    fo_samples = []
+
+    print("Building FiftyOne dataset...")
+
+    for i, (filepath, prompt, w_val) in enumerate(samples):
+        # FiftyOne Brain expects a 1D embedding vector per sample for distance computations
+        raw_embedding = extracted_embeddings[i]                 # e.g., (512, 8, 8)
+        flat_embedding = raw_embedding.flatten().cpu().numpy() # (512*8*8,)
+
+        sample = fo.Sample(filepath=filepath)
+
+        # Store fields for filtering and analysis in the FiftyOne App
+        sample["ground_truth"] = fo.Classification(label=prompt)
+        sample["w"] = float(w_val)
+        sample["clip_score"] = float(clip_scores[i])
+        sample["unet_embedding"] = flat_embedding
+
+        fo_samples.append(sample)
+
+    # Add all samples in one call for efficiency
+    dataset.add_samples(fo_samples)
+    print(f"Added {len(fo_samples)} samples to the dataset.")
+
+    return dataset
+
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+def plot_confidence_distribution(model, loader, device):
+    """
+    Computes and visualizes the classifier's confidence distribution, split by
+    whether predictions are correct or incorrect.
+
+    Output:
+      - A plot with two confidence histograms (correct vs incorrect)
+      - Two lists: (confidences_correct, confidences_incorrect)
+
+    Confidence definition:
+      - For each image, the classifier produces a probability distribution over classes.
+      - Confidence is the maximum class probability (max softmax / max probability).
+
+    Probability computation assumption:
+      - This code assumes `model(images)` returns log-probabilities (e.g., output of log_softmax).
+      - In that case, `torch.exp(log_probs)` converts them to probabilities.
+      - If `model(images)` returns logits instead, replace `torch.exp(output)` with
+        `torch.softmax(output, dim=1)`.
+    """
+    model.eval()
+
+    # Store max-probability confidences for correct vs incorrect predictions
+    conf_correct = []
+    conf_incorrect = []
+
+    with torch.no_grad():
+        for images, labels in loader:
+            images = images.to(device)
+            labels = labels.to(device)
+
+            # Model output is treated as log-probabilities; exponentiation yields probabilities
+            log_probs = model(images)
+            probs = torch.exp(log_probs)
+
+            # Confidence: max class probability; Prediction: argmax class index
+            max_confidence, pred_class = torch.max(probs, dim=1)
+
+            # Separate confidences by correctness to analyze calibration/uncertainty behavior
+            is_correct = pred_class.eq(labels)
+            conf_correct.extend(max_confidence[is_correct].cpu().numpy())
+            conf_incorrect.extend(max_confidence[~is_correct].cpu().numpy())
+
+    # --------------------- Plot ---------------------
+    # Visualization goal: show whether incorrect predictions tend to have lower confidence.
+    sns.set_style("whitegrid")
+    plt.rcParams["figure.dpi"] = 110
+
+    fig, ax = plt.subplots(figsize=(6.2, 4.2))
+
+    color_correct = "#8EC5FF"
+    color_incorrect = "#FFB3C7"
+
+    # Step histograms make overlap/comparison easy (distinct from filled KDE plot style)
+    ax.hist(
+        conf_correct,
+        bins=30,
+        density=True,
+        histtype="step",
+        linewidth=2.2,
+        alpha=0.95,
+        label="Correct",
+        color=color_correct,
+    )
+    ax.hist(
+        conf_incorrect,
+        bins=30,
+        density=True,
+        histtype="step",
+        linewidth=2.2,
+        alpha=0.95,
+        label="Incorrect",
+        color=color_incorrect,
+    )
+
+    # Median lines provide a simple summary of where the bulk of each distribution lies
+    med_correct = float(np.median(conf_correct)) if len(conf_correct) else np.nan
+    med_incorrect = float(np.median(conf_incorrect)) if len(conf_incorrect) else np.nan
+    if not np.isnan(med_correct):
+        ax.axvline(med_correct, linestyle="--", linewidth=1.8, alpha=0.8, color=color_correct)
+    if not np.isnan(med_incorrect):
+        ax.axvline(med_incorrect, linestyle="--", linewidth=1.8, alpha=0.8, color=color_incorrect)
+
+    ax.set_title("Confidence distribution (Correct vs Incorrect)", fontsize=13, pad=10)
+    ax.set_xlabel("Confidence (max class probability)", fontsize=12, labelpad=8)
+    ax.set_ylabel("Density", fontsize=12, labelpad=8)
+
+    ax.set_xlim(0.0, 1.0)
+    ax.tick_params(direction="out", length=5, width=1.4, labelsize=11)
+
+    sns.despine(ax=ax)
+    ax.legend(frameon=True, fontsize=10)
+
+    plt.tight_layout()
+    plt.show()
+
+    return conf_correct, conf_incorrect
+
+
+def find_stability_limit(coverages, accuracies):
+    """
+    Identifies the "elbow" point of an accuracy–coverage curve.
+
+    Intended use:
+      - When sweeping an IDK confidence threshold, coverage decreases as the model
+        rejects more samples, while accuracy on the remaining (accepted) samples
+        typically increases.
+      - The elbow is a heuristic point where returns diminish: accuracy gains start
+        flattening relative to the loss in coverage.
+
+    Method:
+      - Treat the curve as points (coverage_i, accuracy_i).
+      - Compute perpendicular distance of each point to the straight line between
+        the first and last points.
+      - Return the index with the maximum distance (classic elbow heuristic).
+    """
+    cov = np.asarray(coverages, dtype=float)
+    acc = np.asarray(accuracies, dtype=float)
+
+    start = np.array([cov[0], acc[0]])
+    end = np.array([cov[-1], acc[-1]])
+
+    numerator = np.abs(
+        (end[1] - start[1]) * cov
+        - (end[0] - start[0]) * acc
+        + end[0] * start[1]
+        - end[1] * start[0]
+    )
+    denominator = np.sqrt((end[1] - start[1]) ** 2 + (end[0] - start[0]) ** 2) + 1e-12
+
+    distances = numerator / denominator
+    return int(np.argmax(distances))
+
+
+def plot_acc_coverage_curve(coverages, accuracies):
+    """
+    Plots the accuracy–coverage tradeoff for an IDK-threshold sweep and highlights
+    the elbow point.
+
+    Inputs:
+      - coverages: list/array of acceptance rates (fraction of samples not rejected)
+      - accuracies: list/array of accuracy on accepted samples for each threshold
+
+    Output:
+      - A plot showing the curve (points correspond to thresholds)
+      - Returns (elbow_accuracy, elbow_coverage) for reporting or threshold selection
+
+    Visualization choices:
+      - Markers show that the curve consists of discrete threshold settings.
+      - Vertical/horizontal guide lines make the elbow readable.
+      - A small annotation summarizes elbow coordinates.
+    """
+    elbow_idx = find_stability_limit(coverages, accuracies)
+    elbow_acc = float(accuracies[elbow_idx])
+    elbow_cov = float(coverages[elbow_idx])
+
+    sns.set_style("whitegrid")
+    plt.rcParams["figure.dpi"] = 110
+
+    fig, ax = plt.subplots(figsize=(6.2, 4.2))
+
+    ax.plot(
+        coverages,
+        accuracies,
+        linewidth=2.6,
+        marker="o",
+        markersize=4.5,
+        label="Threshold sweep",
+    )
+
+    ax.axvline(elbow_cov, linestyle="--", linewidth=1.6, alpha=0.75)
+    ax.axhline(elbow_acc, linestyle="--", linewidth=1.6, alpha=0.75)
+    ax.scatter(elbow_cov, elbow_acc, s=70, zorder=5, label="Elbow")
+
+    ax.annotate(
+        f"Elbow\ncov={elbow_cov:.3f}\nacc={elbow_acc:.3f}",
+        xy=(elbow_cov, elbow_acc),
+        xytext=(10, -10),
+        textcoords="offset points",
+        fontsize=10,
+        bbox=dict(boxstyle="round,pad=0.25", alpha=0.15),
+    )
+
+    ax.set_title("Accuracy–Coverage curve (IDK option)", fontsize=13, pad=10)
+    ax.set_xlabel("Coverage (fraction accepted)", fontsize=12, labelpad=8)
+    ax.set_ylabel("Accuracy on accepted samples", fontsize=12, labelpad=8)
+
+    sns.despine(ax=ax)
+    ax.legend(frameon=True, fontsize=10)
+    ax.tick_params(direction="out", length=5, width=1.4, labelsize=11)
+
+    plt.tight_layout()
+    plt.show()
+
+    return elbow_acc, elbow_cov
+
+
+

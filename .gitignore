@@ -11,6 +11,7 @@ Diffusion_Model_03/wandb/
 
 # --- Data ---
 Diffusion_Model_03/data/
+Diffusion_Model_03/ddpm_mnist_output/
 
 # --- Python ---
 Diffusion_Model_03/utils/__pycache__/
