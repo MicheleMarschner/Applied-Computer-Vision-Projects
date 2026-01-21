@@ -80,10 +80,12 @@ Running the project in **Google Colab** is recommended for reproducibility. For 
    Creating a shortcut avoids duplicating the dataset while allowing the notebooks to access it via a fixed relative path.
 
    The dataset should have the following structure:
+   ```text
    data/cropped_flowers/
     ├── daisy/
     ├── roses/
     └── sunflowers/
+   ```
 
 5. Set your Weights & Biases API key
    This project logs metrics to W&B. You must create an account and a project before running the notebooks.
@@ -141,16 +143,18 @@ The repo should have the following structure:
 2. Prepare the dataset                                                              
    The cropped flowers dataset provided by the course is used as the real-image reference for FID.
    To make the notebooks fully reproducible, please access it using the public link:
-   👉 [Dataset Download Link](https://drive.google.com/drive/folders/1vtKfOJgDGoSO8JCVes3wHAm9RXy_aQtU?usp=drive_link)
+   [Dataset Download Link](https://drive.google.com/drive/folders/1vtKfOJgDGoSO8JCVes3wHAm9RXy_aQtU?usp=drive_link)
    (accessible to anyone with the link)
 
    Access the dataset, download it and place it inside the repository under: Diffusion_Model_03/data
 
    The dataset should have the following structure:
+   ```text
    data/cropped_flowers/
     ├── daisy/
     ├── roses/
     └── sunflowers/
+    ```
 
 
 3. Set your Weights & Biases API key                                                            
@@ -195,9 +199,9 @@ To reproduce all results shown in this project, first complete the steps in the 
 Once the environment is ready, proceed as follows:
 
 1. Execute each notebook from top to bottom without skipping cells:
-    Assignment_3.ipynb
-    Further_experiments.ipynb
-    Bonus.ipynb
+   * Assignment_3.ipynb
+   * Further_experiments.ipynb
+   * Bonus.ipynb
 
 Each notebook automatically:
 - loads the dataset
@@ -218,10 +222,10 @@ All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/
 ## 5. Results
 All notebooks contain the results (tables, observations and interpretation) in the Evaluation section of the respective notebook. 
 The final datasets can be found on Hugging Face:
-* [Generated Flower Images:](https://huggingface.co/datasets/mmarschn/generated_flowers_experiment)
-* [Generated Optimized Flower Images:](https://huggingface.co/datasets/mmarschn/generated_optimized_flowers_experiment)
-* [MNIST with IDK labels (conditioned diffusion model):](https://huggingface.co/datasets/mmarschn/mnist_idk_experiment)
-* [MNIST with IDK labels (unconditioned diffusion model):](https://huggingface.co/datasets/mmarschn/mnist_idk_experiment_2)
+* [Generated Flower Images](https://huggingface.co/datasets/mmarschn/generated_flowers_experiment)
+* [Generated Optimized Flower Images](https://huggingface.co/datasets/mmarschn/generated_optimized_flowers_experiment)
+* [MNIST with IDK labels (conditioned diffusion model)](https://huggingface.co/datasets/mmarschn/mnist_idk_experiment)
+* [MNIST with IDK labels (unconditioned diffusion model)](https://huggingface.co/datasets/mmarschn/mnist_idk_experiment_2)
 
 Overview of final results for Assignment 3 and further experiments:
 
@@ -229,6 +233,8 @@ Overview of final results for Assignment 3 and further experiments:
 |-----------------|------------------:|-------------------:|------------:|
 | Avg. CLIP score | 0.212             | 0.259              | +22.1%      |
 | FID             | 320.5             | 230.2              | −28.2%      |
+
+An extensive evaluation (also for the additional bonus task) can be found in the respective notebook. 
 
 
 ## 6. Acknowledgements
