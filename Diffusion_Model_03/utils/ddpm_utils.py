@@ -80,7 +80,7 @@ class DDPM:
                 ax = plt.subplot(1, ncols+1, plot_number)
                 if not axis_on:
                     ax.axis('off')
-                other_utils.show_tensor_image(x_t.detach().cpu())
+                visualizations.show_tensor_image(x_t.detach().cpu())
                 plot_number += 1
         plt.show()
 

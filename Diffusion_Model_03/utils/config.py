@@ -63,7 +63,8 @@ CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 CLASSIFIER_MODEL_PATH = CHECKPOINTS_DIR / "best_mnist_classifier.pth"
 CLASSIFIER_IDK_MODEL_PATH = CHECKPOINTS_DIR / "idk_classifier_lenet_2.pth"
 UNET_MODEL_PATH = CHECKPOINTS_DIR / "uNet.pth"
-UNET_MNIST_MODEL_PATH = CHECKPOINTS_DIR / "ddpm_unet.pth"
+UNET_MNIST_MODEL_PATH = CHECKPOINTS_DIR / "ddpm_unet_conditioned.pth"
+UNET_MNIST_UNCOND_MODEL_PATH = CHECKPOINTS_DIR / "ddpm_unet_unconditioned.pth"
 
 # --------------------
 # General

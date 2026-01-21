@@ -1,10 +1,8 @@
 
 from pathlib import Path
-import matplotlib.pyplot as plt
 from PIL import Image
 import torch
 import torch.nn as nn
-import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from datetime import datetime
 import os
@@ -12,26 +10,12 @@ import random
 import numpy as np
 import cv2
 import albumentations as A
-import math
 from torchvision.transforms import ToPILImage
 import fiftyone as fo
 import torch.nn.functional as Func
-from fiftyone import ViewField as F
-from collections import Counter
-import pandas as pd
-from collections import defaultdict
+
 
 from utils import config
-
-
-def show_tensor_image(image):
-    reverse_transforms = transforms.Compose([
-        transforms.Lambda(lambda t: (t + 1) / 2),
-        transforms.Lambda(lambda t: torch.minimum(torch.tensor([1]), t)),
-        transforms.Lambda(lambda t: torch.maximum(torch.tensor([0]), t)),
-        transforms.ToPILImage(),
-    ])
-    plt.imshow(reverse_transforms(image[0].detach().cpu()))
 
 
 def get_timestamp():
@@ -86,119 +70,6 @@ def set_seeds(seed=51):
         print("Warning: Some operations may not be deterministic")
 
     print(f"All random seeds set to {seed} for reproducibility")
-
-
-def show_generated_images_grid(images, prompts, w_tests):
-    """
-    Display all generated images in a grid with guidance weight and prompt labels.
-
-    Args:
-        images (torch.Tensor): Shape (N, 3, H, W), values in [-1, 1].
-        prompts (list[str]): Text prompts (length P).
-        w_tests (list[float]): Guidance weights (length W).
-    """
-
-    images = (images + 1) / 2               # Shift from [-1, 1] space to [0, 1] space
-    images = images.clamp(0, 1)             # Clip any artifacts that fell outside the valid range as 
-                                            # because of Guidance w the model produced values like -1.77 and 2.33
-    P = len(prompts)
-    W = len(w_tests)
-    N = images.shape[0]
-
-    assert N == P * W, "Number of images must equal len(prompts) * len(w_tests)"
-
-    plt.figure(figsize=(2.2 * W, 2.4 * P))
-
-    for i in range(N):
-        w_idx = i // P
-        p_idx = i % P
-
-        img = images[i].detach().cpu()
-        ax = plt.subplot(P, W, p_idx * W + w_idx + 1)
-        ax.imshow(img.permute(1, 2, 0))
-        ax.set_title(f"w={w_tests[w_idx]:+.1f}", fontsize=8)
-        ax.axis("off")
-
-        # Optional: show prompt only on the left
-        if w_idx == 0:
-            ax.set_ylabel(prompts[p_idx], fontsize=8)
-
-    plt.tight_layout()
-    plt.show()
-
-
-def show_images_from_disk_in_saved_order(
-    saved_samples,
-    cols=5,
-    figsize_per_img=(3, 3),
-):
-    """
-    Display images from disk in the exact order of `saved_samples`.
-
-    Each entry in saved_samples:
-        (filepath, prompt, w_val)
-
-    Titles show:
-        i = generation index
-        w = guidance weight
-        prompt = text prompt
-    """
-    n = len(saved_samples)
-    rows = (n + cols - 1) // cols
-
-    fig, axes = plt.subplots(
-        rows,
-        cols,
-        figsize=(figsize_per_img[0] * cols, figsize_per_img[1] * rows),
-    )
-
-    axes = axes.flatten() if n > 1 else [axes]
-
-    for i, (filepath, prompt, w_val) in enumerate(saved_samples):
-        img = Image.open(filepath).convert("RGB")
-        axes[i].imshow(img)
-        axes[i].set_title(
-            f"i={i}  w={w_val:+.1f}\n{prompt}",
-            fontsize=9,
-        )
-        axes[i].axis("off")
-
-    # Hide unused axes
-    for ax in axes[n:]:
-        ax.axis("off")
-
-    plt.tight_layout()
-    plt.show()
-    
-
-def compare_generated_vs_real_roses(
-    generated_images, prompt_idx, prompts, w_tests, real_rose_path
-):
-    P = len(prompts)
-    n_cols = 1 + len(w_tests)
-
-    plt.figure(figsize=(2.2 * n_cols, 3))
-
-    # --- real image (explicit) ---
-    img_real = Image.open(real_rose_path).convert("RGB")
-    ax = plt.subplot(1, n_cols, 1)
-    ax.imshow(img_real)
-    ax.set_title("Real red rose")
-    ax.axis("off")
-
-    # --- generated images ---
-    for w_idx, w in enumerate(w_tests):
-        i = w_idx * P + prompt_idx
-        img = (generated_images[i].cpu() + 1) / 2
-
-        ax = plt.subplot(1, n_cols, w_idx + 2)
-        ax.imshow(img.permute(1, 2, 0).clamp(0, 1))
-        ax.set_title(f"w={w:+.1f}")
-        ax.axis("off")
-
-    plt.suptitle(prompts[prompt_idx], y=1.05)
-    plt.tight_layout()
-    plt.show()
 
 
 class MyDataset(Dataset):
@@ -256,33 +127,6 @@ class GeneratedListDataset(Dataset):
 
         return img
     
-
-def plot_samples_from_view(view, n=10, cols=5):
-    """Plot samples from a FiftyOne view with conditioning label, prediction, and confidence."""
-    samples = view.take(n)
-    rows = math.ceil(n / cols)
-
-    plt.figure(figsize=(cols * 2.4, rows * 2.4))
-
-    for i, sample in enumerate(samples):
-        # Load image from the filepath stored in the FiftyOne sample
-        img = Image.open(sample.filepath)
-
-        # Read stored fields (adapted to your dataset schema)
-        cond = sample["conditioning"].label
-        pred = sample["prediction"].label
-        conf = sample["prediction"].confidence
-
-        ax = plt.subplot(rows, cols, i + 1)
-        ax.imshow(img)
-        ax.axis("off")
-
-        # Show conditioning label (requested digit), predicted label (digit/IDK), and confidence
-        ax.set_title(f"Cond: {cond} | Pred: {pred}\nConf: {conf:.2f}", fontsize=8)
-
-    plt.tight_layout()
-    plt.show()
-
 
 def save_samples_to_disk(generated_images, text_prompts, w, save_dir, repetition_size, n_weights, n_samples):
     """
@@ -436,95 +280,3 @@ def rescale_to_unit_interval_and_stretch(x_gen):
 def normalize_for_lenet(img):
     return (img - 0.1307) / 0.3081       # MNIST Normalize((0.1307,), (0.3081,))
 
-
-def plot_confidence_histograms(dataset, bins=20, figsize=(7, 4)):
-    """Plot confidence histograms for IDK vs non-IDK predictions in a FiftyOne dataset."""
-    idk_conf = dataset.match(F("prediction.label") == "IDK").values("prediction.confidence")
-    ok_conf  = dataset.match(F("prediction.label") != "IDK").values("prediction.confidence")
-
-    plt.figure(figsize=figsize)
-    plt.hist(ok_conf, bins=bins, alpha=0.7, label="Non-IDK")
-    plt.hist(idk_conf, bins=bins, alpha=0.7, label="IDK")
-    plt.xlabel("Prediction confidence")
-    plt.ylabel("Count")
-    plt.legend()
-    plt.tight_layout()
-
-    return plt.figure
-
-
-def idk_frequency_table(dataset):
-  """Return a table of IDK counts and rates per conditioning digit."""
-  idk_view = dataset.match(F("prediction.label") == "IDK")
-  counts = Counter(s["conditioning"].label for s in idk_view)
-  all_counts = Counter(s["conditioning"].label for s in dataset)
-
-  df_idk = pd.DataFrame(sorted(all_counts.items(), key=lambda x: int(x[0])), columns=["digit", "total"])
-  df_cnt = pd.DataFrame(sorted(counts.items(), key=lambda x: int(x[0])), columns=["digit", "idk_count"])
-
-  df = df_idk.merge(df_cnt, on="digit", how="left").fillna({"idk_count": 0})
-  df["idk_count"] = df["idk_count"].astype(int)
-
-  total_idk = max(len(idk_view), 1)
-  df["idk_share"] = (df["idk_count"] / total_idk).round(3)
-  df["idk_rate_per_digit"] = (df["idk_count"] / df["total"]).round(3)
-
-  return df
-
-
-def guidance_stats(dataset, guidance_list):
-    """Print coverage and IDK rate for each guidance weight."""
-    stats = defaultdict(dict)
-
-    for w in sorted(guidance_list):
-        view = dataset.match(F("guidance_w") == w)
-        total = len(view)
-        idk = len(view.match(F("prediction.label") == "IDK"))
-
-        stats[w]["coverage"] = 1 - idk / total if total > 0 else 0.0
-        stats[w]["idk_rate"] = idk / total if total > 0 else 0.0
-
-    for w in sorted(stats):
-        print(f"w={w}: coverage={stats[w]['coverage']:.2%}, idk={stats[w]['idk_rate']:.2%}")
-
-    return stats
-
-
-def report_coverage_accuracy(dataset):
-    """Print coverage and accuracy metrics for an IDK classifier on a FiftyOne dataset."""
-    total = len(dataset)
-
-    idk_view = dataset.match(F("prediction.label") == "IDK")
-    idk = len(idk_view)
-
-    covered_view = dataset.match(F("prediction.label") != "IDK")
-    covered = len(covered_view)
-
-    coverage = covered / total if total > 0 else 0.0
-
-    correct_covered_view = covered_view.match(
-        F("prediction.label") == F("conditioning.label")
-    )
-    correct = len(correct_covered_view)
-
-    acc_covered = correct / covered if covered > 0 else 0.0
-    acc_standard = correct / total if total > 0 else 0.0
-
-    print(f"Total Test Images:    {total}")
-    print(f"IDK Responses:        {idk}")
-    print(f"Covered Responses:    {covered}")
-    print("-" * 30)
-    print(f"COVERAGE:             {coverage:.2%}")
-    print(f"ACCURACY (Covered):   {acc_covered:.2%}")
-    print(f"ACCURACY (Standard):  {acc_standard:.2%}")
-    print("=" * 50)
-
-    return {
-        "total": total,
-        "idk": idk,
-        "covered": covered,
-        "coverage": coverage,
-        "correct_covered": correct,
-        "accuracy_covered": acc_covered,
-        "accuracy_standard": acc_standard,
-    }

@@ -207,7 +207,7 @@ Each notebook automatically:
 - saves results to the checkpoints/ folder
 
 2. Loading pretrained checkpoints
-All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/michele-marschner-university-of-potsdam/diffusion_model_assessment_v2/artifacts/model/diffusion_models03-final-checkpoints/v0/files)) 
+All pre-trained models are available as a W&B artifact ([Link](https://wandb.ai/michele-marschner-university-of-potsdam/diffusion_model_assessment_v2/artifacts/model/diffusion_models03-checkpoints_final/v0/files)) 
 
 ## 4. Limitations
 * Low image resolution limits realism
@@ -220,7 +220,8 @@ All notebooks contain the results (tables, observations and interpretation) in t
 The final datasets can be found on Hugging Face:
 * [Generated Flower Images:](https://huggingface.co/datasets/mmarschn/generated_flowers_experiment)
 * [Generated Optimized Flower Images:](https://huggingface.co/datasets/mmarschn/generated_optimized_flowers_experiment)
-* [MNIST with IDK labels:](https://huggingface.co/datasets/mmarschn/mnist_idk_experiment)
+* [MNIST with IDK labels (conditioned diffusion model):](https://huggingface.co/datasets/mmarschn/mnist_idk_experiment)
+* [MNIST with IDK labels (unconditioned diffusion model):](https://huggingface.co/datasets/mmarschn/mnist_idk_experiment_2)
 
 Overview of final results for Assignment 3 and further experiments:
 
